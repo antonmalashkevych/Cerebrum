@@ -1,0 +1,609 @@
+<title>Cerebrum Canvas</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one full-bleed canvas (the brain) with a floating top bar, a floating scene rail bottom-left,
+   a caption strip bottom-center and a readout HUD bottom-right. Single dark world by design. */
+:root{
+  color-scheme:dark;
+  --bg:#07080f;
+  --fg:#e8ebf5;
+  --fg-dim:#8d94ad;
+  --fg-mute:#5b6179;
+  --panel:rgba(12,14,24,.72);
+  --line:rgba(140,150,190,.18);
+  --accent:#ff8a3d;
+  --grounding:#5aa9ff;
+  --governance:#ffc45a;
+  --agent:#ab8cff;
+  --executable:#ff8c46;
+  --display:"Chakra Petch","IBM Plex Sans",system-ui,sans-serif;
+  --body:"IBM Plex Sans",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--body);overflow:hidden;
+  padding-left:max(0px,env(safe-area-inset-left,0px));padding-right:max(0px,env(safe-area-inset-right,0px))}
+#stage{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:grab;touch-action:none}
+#stage.drag{cursor:grabbing}
+#stage.hover{cursor:pointer}
+.ui{position:fixed;z-index:5;pointer-events:none}
+.ui *{pointer-events:auto}
+#top{top:0;left:0;right:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  padding:12px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));
+  padding-top:calc(12px + env(safe-area-inset-top,0px));
+  background:linear-gradient(180deg,rgba(7,8,15,.85),rgba(7,8,15,0));}
+.brand{display:flex;align-items:baseline;gap:10px;min-width:0}
+.brand h1{font-family:var(--display);font-weight:600;font-size:20px;letter-spacing:.04em;margin:0;text-transform:uppercase}
+.brand .meta{font-family:var(--mono);font-size:11px;color:var(--fg-dim);white-space:nowrap}
+.seg{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:3px;backdrop-filter:blur(8px)}
+.seg button{background:none;border:0;color:var(--fg-dim);font-family:var(--display);font-size:12px;letter-spacing:.08em;text-transform:uppercase;padding:6px 12px;border-radius:5px;cursor:pointer}
+.seg button:hover{color:var(--fg)}
+.seg button.on{background:rgba(255,138,61,.16);color:var(--accent)}
+.seg button:focus-visible,.btn:focus-visible,#find:focus-visible,.rail button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.seglabel{font-family:var(--mono);font-size:10px;color:var(--fg-mute);letter-spacing:.14em;margin-right:-6px}
+.spacer{flex:1}
+#find{background:var(--panel);border:1px solid var(--line);border-radius:8px;color:var(--fg);font-family:var(--body);font-size:13px;padding:8px 12px;width:min(300px,100%);backdrop-filter:blur(8px)}
+#find::placeholder{color:var(--fg-mute)}
+.btn{background:var(--panel);border:1px solid var(--line);border-radius:8px;color:var(--fg-dim);font-family:var(--display);font-size:12px;letter-spacing:.06em;text-transform:uppercase;padding:8px 12px;cursor:pointer;backdrop-filter:blur(8px)}
+.btn:hover{color:var(--fg)}
+#crumb{top:calc(70px + env(safe-area-inset-top,0px));left:max(16px,env(safe-area-inset-left,0px));display:flex;gap:6px;align-items:center;font-family:var(--mono);font-size:11px;color:var(--fg-dim)}
+#crumb button{background:none;border:0;color:inherit;font:inherit;cursor:pointer;padding:4px 6px;border-radius:4px}
+#crumb button:hover{color:var(--fg);background:rgba(255,255,255,.05)}
+#crumb .here{color:var(--accent)}
+#crumb .sep{color:var(--fg-mute)}
+#rail{left:max(16px,env(safe-area-inset-left,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:6px}
+.rail .k{font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--fg-mute);margin-bottom:2px}
+.rail button{text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:6px;color:var(--fg-dim);font-family:var(--display);font-size:12px;letter-spacing:.06em;text-transform:uppercase;padding:7px 10px;cursor:pointer;backdrop-filter:blur(8px);display:flex;gap:10px;align-items:center}
+.rail button i{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--fg-mute)}
+.rail button:hover{color:var(--fg)}
+.rail button.on{color:var(--fg);border-color:rgba(255,138,61,.5)}
+.rail button.on i{background:var(--accent);box-shadow:0 0 8px var(--accent)}
+#caption{left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom,0px));text-align:center;max-width:min(560px,calc(100vw - 32px));opacity:0;transition:opacity .35s}
+#caption.show{opacity:1}
+#caption .t{font-family:var(--display);font-size:16px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--fg)}
+#caption .s{font-family:var(--mono);font-size:11px;color:var(--fg-dim);margin-top:4px}
+#hud{right:max(16px,env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));text-align:right;font-family:var(--mono);font-size:11px;color:var(--fg-dim);line-height:1.7;font-variant-numeric:tabular-nums}
+#hud b{color:var(--fg);font-weight:500}
+#hud .lvl{color:var(--accent);letter-spacing:.1em}
+#tip{position:fixed;z-index:6;pointer-events:none;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-family:var(--mono);font-size:11px;color:var(--fg-dim);display:none;backdrop-filter:blur(8px)}
+#tip b{color:var(--fg);font-family:var(--display);font-size:13px;letter-spacing:.06em;text-transform:uppercase;display:block;margin-bottom:2px}
+#hint{top:calc(70px + env(safe-area-inset-top,0px));right:max(16px,env(safe-area-inset-right,0px));font-family:var(--mono);font-size:10px;color:var(--fg-mute);letter-spacing:.06em;text-align:right}
+@media (max-width:640px){
+  .brand .meta,#hint{display:none}
+  #hud{display:none}
+  #caption{bottom:calc(140px + env(safe-area-inset-bottom,0px))}
+}
+@media (prefers-reduced-motion:reduce){ #caption{transition:none} }
+</style>
+
+<canvas id="stage"></canvas>
+
+<div id="top" class="ui">
+  <div class="brand"><h1>Cerebrum</h1><span class="meta" id="meta">7,452 neurons · 50 kinds · 18,900 synapses · live</span></div>
+  <div class="seg" role="group" aria-label="Group by">
+    <span class="seglabel">GROUP BY</span>
+    <button id="g-lobe" class="on" data-mode="lobe">Lobe</button>
+    <button id="g-region" data-mode="region">Region</button>
+    <button id="g-kind" data-mode="kind">Kind</button>
+  </div>
+  <div class="spacer"></div>
+  <input id="find" type="search" placeholder="Find anything Kinetic knows · Enter to fly there" autocomplete="off">
+  <div class="seg" role="group" aria-label="Mode">
+    <button id="m-view" class="on">View</button>
+    <button id="m-edit">Edit</button>
+  </div>
+  <button class="btn" id="reset" title="Clear every signal, return to L1 lobes and the home camera">Reset</button>
+  <button class="btn" id="snd" aria-pressed="true">Sound on</button>
+  <button class="btn" id="fs">Full screen</button>
+</div>
+
+<div id="crumb" class="ui"><button id="c-root" class="here">Cerebrum</button></div>
+<div id="hint" class="ui">drag to orbit · shift-drag or right-drag to pan · scroll to zoom · click a lobe to open it · esc to go back · r to reset</div>
+
+<div id="rail" class="ui rail">
+  <span class="k">SCENES</span>
+  <button data-scene="resting" class="on"><i></i>Resting state</button>
+  <button data-scene="thought"><i></i>A thought</button>
+  <button data-scene="cascade"><i></i>Diagnostic cascade</button>
+  <button data-scene="gate"><i></i>The gate</button>
+  <button data-scene="genesis"><i></i>Neurogenesis</button>
+  <button data-scene="lapse"><i></i>A year of growth</button>
+</div>
+
+<div id="caption" class="ui"><div class="t" id="cap-t"></div><div class="s" id="cap-s"></div></div>
+
+<div id="hud" class="ui">
+  <div class="lvl" id="hud-lvl">L1 · LOBES</div>
+  <div><b id="hud-n">7,452</b> neurons · <b id="hud-e">18,900</b> synapses</div>
+  <div><b id="hud-sig">0</b> signals/s · <b id="hud-fire">0</b> firing</div>
+  <div id="hud-grow">age 0w 0d</div>
+  <div id="hud-focus">resting state · sample catalog</div>
+</div>
+<div id="tip"></div>
+
+<script>
+(function(){
+'use strict';
+let seed = 20261029;
+function rnd(){ seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }
+function gauss(){ let u=0,v=0; while(u===0)u=rnd(); while(v===0)v=rnd(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ---------- catalog (sample, shaped like the live one) ----------
+const LOBES = [
+  {id:'grounding',  name:'Grounding',  role:'memory · sensory cortex',  rgb:[90,169,255],  pos:[-560,-20,-140]},
+  {id:'governance', name:'Governance', role:'prefrontal cortex',        rgb:[255,196,90],  pos:[-60,-360,120]},
+  {id:'agent',      name:'Agent',      role:'motor cortex',             rgb:[171,140,255], pos:[560,-120,-80]},
+  {id:'executable', name:'Executable', role:'cerebellum · spinal cord', rgb:[255,140,70],  pos:[60,200,140]},
+];
+const TREE = {
+  grounding:{ 'Technical metadata':{DataElement:1500,AxisPosition:49,SelectionAxis:22,DataProduct:15,SemanticModel:11,EntityKey:3},
+              'Business vocabulary':{VocabularyTerm:180,DomainConcept:60,ReferenceCode:20},
+              'Reference data and taxonomies':{TaxonomyCategory:90,Calendar:30,PeriodType:20} },
+  governance:{ 'Data policy':{DataPolicy:12,OutputContract:10}, 'Metric standards':{MetricStandard:18,AnalyticGuardrail:12} },
+  agent:{ 'Process knowledge':{PlaybookStep:60,Playbook:40,TaskArchetype:18,OperationalFunction:2},
+          'Analytic guardrails':{VerifiedQuestion:40,PolicyRule:30,AnalyticOperator:10} },
+  executable:{ 'Kinetic data':{Metric:2400,MetricDefinition:400,Dimension:200},
+               'Semantic layer':{DimensionDefinition:700,DimensionValue:500,MasterEntity:200},
+               'Ontology':{ClassificationAssertion:400,CrosswalkAssertion:300,KnowledgeLayer:100} },
+};
+const BUNDLES = {'grounding|executable':4120,'executable|governance':2250,'executable|agent':1380,'agent|governance':610,'grounding|agent':420,'grounding|governance':310};
+
+const families=[], kinds=[]; const N=[];
+LOBES.forEach((L,li)=>{ Object.entries(TREE[L.id]).forEach(([fname,ks])=>{ const fi=families.length; families.push({name:fname,lobe:li,count:0,kinds:[]});
+  Object.entries(ks).forEach(([kname,cnt])=>{ const ki=kinds.length; kinds.push({name:kname,lobe:li,fam:fi,count:cnt,start:N.length,pulse:0,phase:rnd()*6.283}); families[fi].kinds.push(ki); families[fi].count+=cnt; for(let i=0;i<cnt;i++) N.push({l:li,f:fi,k:ki}); }); }); });
+const COUNT=N.length; const CAP=COUNT+2400; let LIVE=COUNT; // LIVE grows over time
+const X=new Float32Array(CAP), Y=new Float32Array(CAP), Z=new Float32Array(CAP), TX=new Float32Array(CAP), TY=new Float32Array(CAP), TZ=new Float32Array(CAP);
+const PX=new Float32Array(CAP), PY=new Float32Array(CAP), PS=new Float32Array(CAP); // projected
+const PH=new Float32Array(CAP), SZ=new Float32Array(CAP), BR=new Float32Array(CAP), DELAY=new Float32Array(CAP), BORN=new Float32Array(CAP);
+const LOBE=new Uint8Array(CAP), KIND=new Uint8Array(CAP); const GOX=new Float32Array(CAP), GOY=new Float32Array(CAP), GOZ=new Float32Array(CAP);
+for(let i=0;i<COUNT;i++){ LOBE[i]=N[i].l; KIND[i]=N[i].k; PH[i]=rnd()*6.283; SZ[i]=0.8+rnd()*1.4; BR[i]=rnd(); }
+
+// ---------- synapses ----------
+const EA=[], EB=[];
+kinds.forEach(k=>{ const m=Math.min(Math.round(k.count*1.1),1800); for(let i=0;i<m;i++){ const a=k.start+Math.floor(rnd()*k.count), b=k.start+Math.floor(rnd()*k.count); if(a!==b){EA.push(a);EB.push(b);} } });
+families.forEach(f=>{ if(f.kinds.length<2) return; const m=Math.round(f.count*0.12); for(let i=0;i<m;i++){ const k1=kinds[f.kinds[Math.floor(rnd()*f.kinds.length)]], k2=kinds[f.kinds[Math.floor(rnd()*f.kinds.length)]]; if(k1===k2)continue; EA.push(k1.start+Math.floor(rnd()*k1.count)); EB.push(k2.start+Math.floor(rnd()*k2.count)); } });
+const INTRA=EA.length;
+const lobeRange=LOBES.map((L,li)=>{ let s=-1,e=-1; for(let i=0;i<COUNT;i++){ if(LOBE[i]===li){ if(s<0)s=i; e=i; } } return [s,e]; });
+Object.entries(BUNDLES).forEach(([key,cnt])=>{ const [a,b]=key.split('|').map(id=>LOBES.findIndex(L=>L.id===id)); const n=Math.round(cnt/3);
+  for(let i=0;i<n;i++){ EA.push(lobeRange[a][0]+Math.floor(rnd()*(lobeRange[a][1]-lobeRange[a][0]))); EB.push(lobeRange[b][0]+Math.floor(rnd()*(lobeRange[b][1]-lobeRange[b][0]))); } });
+const EDGES=EA.length;
+const SYN_TOTAL = INTRA + Object.values(BUNDLES).reduce((a,b)=>a+b,0);
+document.getElementById('meta').textContent = `${COUNT.toLocaleString()} neurons · ${kinds.length} kinds · ${SYN_TOTAL.toLocaleString()} synapses · live`;
+document.getElementById('hud-n').textContent = COUNT.toLocaleString();
+document.getElementById('hud-e').textContent = SYN_TOTAL.toLocaleString();
+const ADJ = Array.from({length:CAP},()=>null);
+for(let e=0;e<INTRA;e++){ (ADJ[EA[e]]||(ADJ[EA[e]]=[])).push(EB[e]); (ADJ[EB[e]]||(ADJ[EB[e]]=[])).push(EA[e]); }
+const DRAW_E=[]; for(let e=0;e<INTRA;e+=2) DRAW_E.push(e);
+
+// ---------- layouts (3D) ----------
+const radiusFor = n => 14 + 2.6*Math.pow(n,0.55);
+function placeChildren(cx,cy,cz,R,children){
+  const sorted=children.slice().sort((a,b)=>b.n-a.n);
+  sorted.forEach((c,i)=>{ c.r=radiusFor(c.n)*0.85; if(i===0){c.cx=cx;c.cy=cy;c.cz=cz;return;}
+    const ang=i*2.399963+0.7, d=R*(0.42+0.22*Math.sqrt(i/Math.max(1,sorted.length-1)))+(rnd()-0.5)*R*0.1;
+    c.cx=cx+Math.cos(ang)*d; c.cy=cy+Math.sin(ang)*d*0.82; c.cz=cz+(rnd()-0.5)*R*0.7; });
+}
+function scatter(kindIdx,cx,cy,cz,r){
+  const k=kinds[kindIdx]; k.cx=cx; k.cy=cy; k.cz=cz; k.r=r;
+  for(let i=0;i<k.count;i++){ const id=k.start+i;
+    const a=rnd()*6.283, b=Math.acos(2*rnd()-1), rr=Math.abs(gauss())*r*0.5 + (rnd()<0.08? r*(0.8+rnd()*0.6):0);
+    TX[id]=cx+Math.sin(b)*Math.cos(a)*rr; TY[id]=cy+Math.sin(b)*Math.sin(a)*rr*0.85; TZ[id]=cz+Math.cos(b)*rr*0.8; }
+}
+let clusters=[], bundles=[];
+function layout(mode){
+  seed=777; clusters=[];
+  if(mode==='lobe'){
+    LOBES.forEach((L,li)=>{ const cnt=lobeRange[li][1]-lobeRange[li][0]+1; const R=radiusFor(cnt);
+      const ch=kinds.map((k,ki)=>({ki,n:k.count})).filter(c=>kinds[c.ki].lobe===li);
+      placeChildren(L.pos[0],L.pos[1],L.pos[2],R,ch); ch.forEach(c=>scatter(c.ki,c.cx,c.cy,c.cz,c.r));
+      clusters.push({name:L.name,sub:L.role,count:cnt,cx:L.pos[0],cy:L.pos[1],cz:L.pos[2],r:R,rgb:L.rgb,lobe:li,range:lobeRange[li],children:ch}); });
+  } else if(mode==='region'){
+    const order=families.map((f,i)=>i).sort((a,b)=>families[b].count-families[a].count);
+    order.forEach((fi,i)=>{ const f=families[fi]; const R=radiusFor(f.count);
+      const ang=i*2.399963, d=(i===0?0:150+95*Math.sqrt(i)); const cx=Math.cos(ang)*d*1.25, cy=Math.sin(ang)*d*0.8, cz=(rnd()-0.5)*300;
+      const ch=f.kinds.map(ki=>({ki,n:kinds[ki].count})); placeChildren(cx,cy,cz,R,ch); ch.forEach(c=>scatter(c.ki,c.cx,c.cy,c.cz,c.r));
+      const s=kinds[f.kinds[0]].start, e=kinds[f.kinds[f.kinds.length-1]].start+kinds[f.kinds[f.kinds.length-1]].count-1;
+      clusters.push({name:f.name,sub:LOBES[f.lobe].name+' lobe',count:f.count,cx,cy,cz,r:R,rgb:LOBES[f.lobe].rgb,lobe:f.lobe,range:[s,e],children:ch}); });
+  } else {
+    const order=kinds.map((k,i)=>i).sort((a,b)=>kinds[b].count-kinds[a].count);
+    order.forEach((ki,i)=>{ const k=kinds[ki]; const R=radiusFor(k.count)*0.9;
+      const ang=i*2.399963, d=(i===0?0:120+62*Math.sqrt(i)); const cx=Math.cos(ang)*d*1.3, cy=Math.sin(ang)*d*0.85, cz=(rnd()-0.5)*400;
+      scatter(ki,cx,cy,cz,R); clusters.push({name:k.name,sub:families[k.fam].name,count:k.count,cx,cy,cz,r:R,rgb:LOBES[k.lobe].rgb,lobe:k.lobe,range:[k.start,k.start+k.count-1],children:[]}); });
+  }
+  clusters.forEach(c=>{ c.kindSet=new Set(); kinds.forEach((k,ki)=>{ if(k.start>=c.range[0]&&k.start<=c.range[1]) c.kindSet.add(ki); }); });
+  const map=new Map(); const cl=new Int16Array(COUNT); clusters.forEach((c,ci)=>{ for(let i=c.range[0];i<=c.range[1];i++) cl[i]=ci; });
+  for(let e=0;e<EDGES;e++){ const a=cl[EA[e]], b=cl[EB[e]]; if(a===b) continue; const key=a<b?a+'|'+b:b+'|'+a; map.set(key,(map.get(key)||0)+1); }
+  bundles=[]; map.forEach((n,key)=>{ const [a,b]=key.split('|').map(Number); if(n<4) return; bundles.push({a,b,n:n*3,acc:0}); });
+  // sub-bundles: kind-to-kind tracts across clusters
+  const km=new Map(); for(let e=0;e<EDGES;e++){ if(cl[EA[e]]===cl[EB[e]]) continue; const a=KIND[EA[e]],b=KIND[EB[e]]; const key=a<b?a+'|'+b:b+'|'+a; km.set(key,(km.get(key)||0)+1); }
+  subBundles=[]; km.forEach((n,key)=>{ const [a,b]=key.split('|').map(Number); if(n<2) return; subBundles.push({a,b,n:n*3,acc:0,s:rnd()<0.5?1:-1,lift:0.08+rnd()*0.2,bow:0.08+rnd()*0.22}); });
+  subBundles.sort((p,q)=>q.n-p.n); subBundles=subBundles.slice(0,90);
+  // fibers: individual cross-cluster synapses drawn as their own curved paths
+  fibers=[]; const cross=[]; for(let e=0;e<EDGES;e++) if(cl[EA[e]]!==cl[EB[e]]) cross.push(e);
+  for(let i=0;i<Math.min(700,cross.length);i++){ const e=cross[Math.floor(rnd()*cross.length)]; const a=EA[e],b=EB[e]; fibers.push({a,b,ox:(rnd()-0.5)*0.5,oy:(rnd()-0.5)*0.5,oz:(rnd()-0.5)*0.6,lobe:LOBE[a]}); }
+}
+let subBundles=[], fibers=[];
+function subGeom(b){ const A=kinds[b.a],B=kinds[b.b]; const mx=(A.cx+B.cx)/2,my=(A.cy+B.cy)/2,mz=(A.cz+B.cz)/2; const dx=B.cx-A.cx,dy=B.cy-A.cy,d=Math.hypot(dx,dy)||1; const nx=-dy/d,ny=dx/d; return [A.cx,A.cy,A.cz, mx+nx*d*b.bow*b.s,my+ny*d*b.bow*b.s,mz+d*b.lift*b.s, B.cx,B.cy,B.cz]; }
+function fiberGeom(f){ const a=f.a,b=f.b; const dx=X[b]-X[a],dy=Y[b]-Y[a],dz=Z[b]-Z[a],d=Math.hypot(dx,dy,dz)||1; return [X[a],Y[a],Z[a], (X[a]+X[b])/2+(-dy*f.ox+dz*f.oz)*0.6, (Y[a]+Y[b])/2+(dx*f.oy-dz*f.ox)*0.6, (Z[a]+Z[b])/2+d*f.oz*0.5, X[b],Y[b],Z[b]]; }
+let mode='lobe'; layout(mode);
+for(let i=0;i<COUNT;i++){ X[i]=TX[i]; Y[i]=TY[i]; Z[i]=TZ[i]; }
+function inCluster(i,c){ return i<COUNT ? (i>=c.range[0]&&i<=c.range[1]) : c.kindSet.has(KIND[i]); }
+function placeGrown(){ for(let i=COUNT;i<LIVE;i++){ const k=kinds[KIND[i]]; TX[i]=k.cx+GOX[i]*k.r; TY[i]=k.cy+GOY[i]*k.r; TZ[i]=k.cz+GOZ[i]*k.r; } }
+
+// ---------- growth: the brain ages in real time ----------
+// Deterministic from the wall clock. Rates per week, with a gentle compounding term: a larger catalog
+// earns more connections per new neuron, so growth is linear in the short run and slowly accelerates.
+const GROWTH={epoch:Date.UTC(2026,9,29), neuronsPerWeek:4, synapsesPerWeek:9, compound:0.004};
+const dueAt=(ms,rate)=>{ const w=Math.max(0,(ms-GROWTH.epoch)/604800000); return Math.floor(rate*w*(1+GROWTH.compound*w)); };
+const GA=[], GB=[]; // grown synapses
+let gseed=20261029; function grnd(){ gseed|=0; gseed=gseed+0x6D2B79F5|0; let t=Math.imul(gseed^gseed>>>15,1|gseed); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }
+const kindCum=[]; { let acc=0; kinds.forEach(k=>{ acc+=Math.pow(k.count,0.8); kindCum.push(acc); }); }
+function pickKind(){ const r=grnd()*kindCum[kindCum.length-1]; for(let i=0;i<kindCum.length;i++) if(r<kindCum[i]) return i; return kindCum.length-1; }
+function bornNeuron(animate){ if(LIVE>=CAP) return -1; const i=LIVE++; const ki=pickKind(); const k=kinds[ki]; KIND[i]=ki; LOBE[i]=k.lobe;
+  const a=grnd()*6.283, b=Math.acos(2*grnd()-1), rr=Math.abs((grnd()+grnd()+grnd()-1.5))*0.6+0.05; GOX[i]=Math.sin(b)*Math.cos(a)*rr; GOY[i]=Math.sin(b)*Math.sin(a)*rr*0.85; GOZ[i]=Math.cos(b)*rr*0.8;
+  PH[i]=grnd()*6.283; SZ[i]=1.1+grnd()*1.2; BR[i]=0.75+grnd()*0.25; TX[i]=k.cx+GOX[i]*k.r; TY[i]=k.cy+GOY[i]*k.r; TZ[i]=k.cz+GOZ[i]*k.r; X[i]=TX[i]; Y[i]=TY[i]; Z[i]=TZ[i];
+  BORN[i]=animate?now:0; if(animate){ flash(i,2.2,1800); rings.push({x:TX[i],y:TY[i],z:TZ[i],t0:now,rgb:LOBES[k.lobe].rgb,amp:0.1}); }
+  return i; }
+function bornSynapse(animate){ let a,b; if(grnd()<0.7){ const ki=pickKind(); const k=kinds[ki]; a=k.start+Math.floor(grnd()*k.count); b=(LIVE>COUNT&&grnd()<0.5)?COUNT+Math.floor(grnd()*(LIVE-COUNT)):k.start+Math.floor(grnd()*k.count); }
+  else { a=Math.floor(grnd()*LIVE); b=Math.floor(grnd()*LIVE); } if(a===b) return; GA.push(a); GB.push(b); (ADJ[a]||(ADJ[a]=[])).push(b); (ADJ[b]||(ADJ[b]=[])).push(a);
+  if(animate){ signals.push({kind:'grow',a,b,t:0,speed:0.0007,rgb:LOBES[LOBE[a]].rgb,size:0.9}); flash(a,1.2,900); } }
+let grownN=0, grownS=0;
+function growTo(ms,animate){ const dn=dueAt(ms,GROWTH.neuronsPerWeek), ds=dueAt(ms,GROWTH.synapsesPerWeek); while(grownN<dn){ bornNeuron(animate); grownN++; } while(grownS<ds){ bornSynapse(animate); grownS++; } }
+function growthText(ms){ const w=Math.max(0,(ms-GROWTH.epoch)/604800000); const d=Math.floor(w*7); const nextS=(grownS+1)/GROWTH.synapsesPerWeek; const etaH=Math.max(0,(nextS/(1+GROWTH.compound*w)-w)*168); return `age ${Math.floor(d/7)}w ${d%7}d · +${grownN} neurons · +${grownS} synapses · next synapse in ${etaH<1?Math.max(1,Math.round(etaH*60))+'m':Math.round(etaH)+'h'}`; }
+function refreshCounts(){ document.getElementById('meta').textContent=`${LIVE.toLocaleString()} neurons · ${kinds.length} kinds · ${(SYN_TOTAL+grownS).toLocaleString()} synapses · live`; document.getElementById('hud-n').textContent=LIVE.toLocaleString(); document.getElementById('hud-e').textContent=(SYN_TOTAL+grownS).toLocaleString(); }
+
+// ---------- canvas & 3D camera ----------
+const cv=document.getElementById('stage'), ctx=cv.getContext('2d');
+let W=0,H=0,DPR=1;
+const FOV=1400;
+const cam={x:0,y:-60,z:0,yaw:-0.35,pitch:0.28,zoom:1};
+const camT={x:0,y:-60,z:0,yaw:-0.35,pitch:0.28,zoom:1};
+let autoOrbit=true, lastInput=0;
+function fitZoom(){ return Math.min(W/1900, H/1350); }
+function resize(){ DPR=Math.min(2,devicePixelRatio||1); W=innerWidth; H=innerHeight; cv.width=W*DPR; cv.height=H*DPR; cv.style.width=W+'px'; cv.style.height=H+'px'; if(focus===null){ camT.zoom=fitZoom(); cam.zoom=camT.zoom; }
+  const th=document.getElementById('top').offsetHeight+4; document.getElementById('crumb').style.top=th+'px'; document.getElementById('hint').style.top=th+'px'; }
+addEventListener('resize',resize);
+let cy_=1,sy_=0,cp_=1,sp_=0;
+function proj(x,y,z,out){ // rotate around target, then perspective
+  x-=cam.x; y-=cam.y; z-=cam.z;
+  const x1=x*cy_+z*sy_, z1=-x*sy_+z*cy_;
+  const y2=y*cp_-z1*sp_, z2=y*sp_+z1*cp_;
+  const s=FOV/(FOV+z2*0.9+900)*1.5; // depth scale
+  out[0]=x1*s*cam.zoom+W/2; out[1]=y2*s*cam.zoom+H/2; out[2]=s; return out;
+}
+const P=[0,0,0];
+
+function sprite(rgb,size,core){ const c=document.createElement('canvas'); c.width=c.height=size; const g=c.getContext('2d'); const r=size/2, grd=g.createRadialGradient(r,r,0,r,r,r); grd.addColorStop(0,`rgba(${core?'255,255,255':rgb.join(',')},1)`); grd.addColorStop(0.25,`rgba(${rgb.join(',')},0.9)`); grd.addColorStop(0.55,`rgba(${rgb.join(',')},0.25)`); grd.addColorStop(1,`rgba(${rgb.join(',')},0)`); g.fillStyle=grd; g.fillRect(0,0,size,size); return c; }
+const SPR_DIM=LOBES.map(L=>sprite(L.rgb.map(v=>Math.round(v*0.75)),16,false));
+const SPR=LOBES.map(L=>sprite(L.rgb,16,true));
+const SPR_FLASH=LOBES.map(L=>sprite(L.rgb,64,true));
+const SPR_WHITE=sprite([255,255,255],48,true);
+// ---------- aura: a faint nebula field around the whole brain ----------
+function nebula(size,seedv){ seed=seedv; const c=document.createElement('canvas'); c.width=c.height=size; const g=c.getContext('2d'); const R=size/2;
+  const pal=[[90,169,255],[255,196,90],[171,140,255],[255,140,70],[70,200,210],[220,90,160]];
+  g.globalCompositeOperation='lighter';
+  for(let i=0;i<22;i++){ const a=rnd()*6.283, d=rnd()*R*0.55; const x=R+Math.cos(a)*d, y=R+Math.sin(a)*d*0.8; const r=R*(0.18+rnd()*0.32); const col=pal[Math.floor(rnd()*pal.length)];
+    const gr=g.createRadialGradient(x,y,0,x,y,r); gr.addColorStop(0,`rgba(${col.join(',')},${0.16+rnd()*0.14})`); gr.addColorStop(0.5,`rgba(${col.join(',')},${0.05})`); gr.addColorStop(1,`rgba(${col.join(',')},0)`); g.fillStyle=gr; g.beginPath(); g.ellipse(x,y,r,r*(0.6+rnd()*0.6),rnd()*3.14,0,6.283); g.fill(); }
+  // filaments
+  g.lineCap='round'; for(let i=0;i<40;i++){ const col=pal[Math.floor(rnd()*pal.length)]; g.strokeStyle=`rgba(${col.join(',')},${0.05+rnd()*0.06})`; g.lineWidth=6+rnd()*26; g.beginPath(); let x=R+(rnd()-0.5)*R, y=R+(rnd()-0.5)*R*0.8; g.moveTo(x,y); for(let k=0;k<4;k++){ x+=(rnd()-0.5)*R*0.5; y+=(rnd()-0.5)*R*0.4; g.lineTo(x,y); } g.stroke(); }
+  g.globalCompositeOperation='destination-in'; const m=g.createRadialGradient(R,R,R*0.2,R,R,R); m.addColorStop(0,'rgba(0,0,0,1)'); m.addColorStop(0.7,'rgba(0,0,0,0.6)'); m.addColorStop(1,'rgba(0,0,0,0)'); g.fillStyle=m; g.fillRect(0,0,size,size); return c; }
+const NEB=[nebula(640,31),nebula(640,77)];
+const aura={level:0.1, eman:0, emanT0:-1e9, next:0};
+function emanate(strength=1){ aura.emanT0=now; aura.emanStr=strength; rings.push({x:0,y:-60,z:0,t0:now,rgb:[200,210,255],amp:3.2*strength,soft:true}); }
+
+const STARS=[]; seed=99; for(let i=0;i<2600;i++){ const a=rnd()*6.283; const sp=0.004+rnd()*0.02; STARS.push({x:(rnd()-0.5)*5200,y:(rnd()-0.5)*3400,z:(rnd()-0.5)*3000,s:rnd(),p:rnd()*6.283,vx:Math.cos(a)*sp,vy:(rnd()-0.5)*sp*0.6,vz:Math.sin(a)*sp,mote:rnd()<0.08}); }
+const rings=[]; // entry sparks {x,y,z,t0,rgb}
+let ingressNext=2500;
+function ingress(){
+  const far=()=>{ const a=rnd()*6.283, b=Math.acos(2*rnd()-1), d=1700+rnd()*500; return [Math.sin(b)*Math.cos(a)*d, Math.sin(b)*Math.sin(a)*d*0.6, Math.cos(b)*d]; };
+  const order=[]; const n=clusters.length; let c0=rnd()<0.6&&mode==='lobe'?0:Math.floor(rnd()*n); order.push(c0);
+  const hops=2+Math.floor(rnd()*2); for(let h=0;h<hops;h++){ let c=Math.floor(rnd()*n); if(n>1) while(c===order[order.length-1]) c=Math.floor(rnd()*n); order.push(c); }
+  const spark=(c,amp)=>{ rings.push({x:c.cx,y:c.cy,z:c.cz,t0:now,rgb:c.rgb,amp}); flashCluster(c,Math.round(10*amp),1.6*amp,160); sparkSound(amp); };
+  const step=(i)=>{ if(i>=order.length-1){ const c=clusters[order[i]]; sendPath([c.cx,c.cy,c.cz],far(),{size:1.1,speed:0.0014,rgb:c.rgb}); emanate(0.5); return; }
+    sendBundle(order[i],order[i+1],{size:1.25,speed:0.0013,burst:0,rgb:[255,255,255],onEnd:()=>{ spark(clusters[order[i+1]],0.8); step(i+1); }}); };
+  const c=clusters[c0]; sendPath(far(),[c.cx,c.cy,c.cz],{size:1.6,speed:0.0011,rgb:[255,255,255],onEnd:()=>{ spark(c,1.4); step(0); }});
+}
+const MESH=[]; for(let i=0;i<90;i++) MESH.push({x:(rnd()-0.5)*4200,y:(rnd()-0.5)*2800,z:(rnd()-0.5)*2400});
+const MESHE=[]; for(let i=0;i<MESH.length;i++) for(let j=i+1;j<MESH.length;j++){ const d=Math.hypot(MESH[i].x-MESH[j].x,MESH[i].y-MESH[j].y,MESH[i].z-MESH[j].z); if(d<620) MESHE.push([i,j]); }
+
+// ---------- dynamics ----------
+const flashes=[], signals=[], marks=[];
+let sigCount=0, lastRateT=0;
+function flash(i,amp=1,dur=900){ flashes.push({i,t0:now,dur,amp}); }
+function flashCluster(c,n,amp=1,spread=0){ for(let k=0;k<n;k++){ const i=c.range[0]+Math.floor(rnd()*(c.range[1]-c.range[0]+1)); if(spread) setTimeout(()=>flash(i,amp),rnd()*spread); else flash(i,amp); } }
+function bez3(g,t){ const u=1-t; return [u*u*g[0]+2*u*t*g[3]+t*t*g[6], u*u*g[1]+2*u*t*g[4]+t*t*g[7], u*u*g[2]+2*u*t*g[5]+t*t*g[8]]; }
+function bundleGeom(b){ const A=clusters[b.a],B=clusters[b.b]; const mx=(A.cx+B.cx)/2,my=(A.cy+B.cy)/2,mz=(A.cz+B.cz)/2; const dx=B.cx-A.cx,dy=B.cy-A.cy,d=Math.hypot(dx,dy)||1; const nx=-dy/d,ny=dx/d; const s=(b.a+b.b)%2?1:-1; return [A.cx,A.cy,A.cz, mx+nx*d*0.16*s,my+ny*d*0.16*s,mz+d*0.12, B.cx,B.cy,B.cz]; }
+function sendBundle(a,b,opts={}){ let bd=bundles.find(x=>(x.a===a&&x.b===b)||(x.a===b&&x.b===a)); const rev=bd?bd.a!==a:false;
+  const g=bd?bundleGeom(bd):[clusters[a].cx,clusters[a].cy,clusters[a].cz,(clusters[a].cx+clusters[b].cx)/2,(clusters[a].cy+clusters[b].cy)/2,(clusters[a].cz+clusters[b].cz)/2,clusters[b].cx,clusters[b].cy,clusters[b].cz];
+  signals.push({kind:'bundle',g,rev,t:0,speed:opts.speed||0.0011,rgb:opts.rgb||clusters[a].rgb,size:opts.size||1,onEnd:opts.onEnd,target:b,burst:opts.burst??6}); sigCount++; }
+function sendEdge(e,rev){ signals.push({kind:'edge',e,rev,t:0,speed:0.004+rnd()*0.004,rgb:LOBES[LOBE[EA[e]]].rgb,size:0.6}); sigCount++; }
+function sendPath(from,to,opts={}){ signals.push({kind:'bundle',g:[from[0],from[1],from[2],(from[0]+to[0])/2,(from[1]+to[1])/2-140,(from[2]+to[2])/2,to[0],to[1],to[2]],rev:false,t:0,speed:opts.speed||0.0012,rgb:opts.rgb||[255,255,255],size:opts.size||1.4,onEnd:opts.onEnd,burst:0}); sigCount++; }
+function clusterOfLobe(li){ return clusters.find(c=>c.lobe===li && mode==='lobe') || clusters.filter(c=>c.lobe===li).sort((a,b)=>b.count-a.count)[0]; }
+
+// ambient: continuous impulses on every bundle, streams inside lobes, and pulsing regions
+let ambient=true, ambientLevel=1;
+const pulseSet=new Set(); let pulseNext=0;
+function ambientTick(dt){
+  if(!ambient) return;
+  const k=ambientLevel*(reduced?0.4:1);
+  bundles.forEach(b=>{ b.acc+=dt*k*(0.0009+0.0022*Math.log10(b.n)/3.7); while(b.acc>1){ b.acc-=1; const rev=rnd()<0.5; sendBundle(rev?b.b:b.a, rev?b.a:b.b, {burst:3,size:0.7+rnd()*0.5,speed:0.0008+rnd()*0.0008}); } });
+  subBundles.forEach(b=>{ b.acc+=dt*k*(0.0004+0.0012*Math.log10(b.n)/3); while(b.acc>1){ b.acc-=1; const rev=rnd()<0.5; signals.push({kind:'sub',g:subGeom(b),rev,t:0,speed:0.0009+rnd()*0.0009,rgb:LOBES[kinds[rev?b.b:b.a].lobe].rgb,size:0.55,target:kinds[rev?b.a:b.b]}); sigCount++; } });
+  const nfb=dt*0.02*k; for(let i=0;i<nfb;i++) if(rnd()<nfb-i){ const f=fibers[Math.floor(rnd()*fibers.length)]; if(f) signals.push({kind:'fiber',f,rev:rnd()<0.5,t:0,speed:0.0012+rnd()*0.001,rgb:LOBES[f.lobe].rgb,size:0.45}); sigCount++; }
+  const ne=dt*0.045*k; for(let i=0;i<ne;i++) if(rnd()<ne-i) sendEdge(Math.floor(rnd()*INTRA), rnd()<0.5);
+  const nf=dt*0.03*k; for(let i=0;i<nf;i++) if(rnd()<nf-i) flash(Math.floor(rnd()*LIVE),0.6,700);
+  if(now>ingressNext){ ingressNext=now+(3500+rnd()*4500)/Math.max(0.3,k); ingress(); }
+  if(now>aura.next){ aura.next=now+22000+rnd()*18000; if(scene==='resting') emanate(0.7); }
+  // pulsing regions: a few kinds at a time, rotating
+  if(now>pulseNext){ pulseNext=now+2800+rnd()*2500; const cand=kinds.map((k,i)=>i).filter(i=>!pulseSet.has(i)); const pick=cand[Math.floor(rnd()*cand.length)]; pulseSet.add(pick); kinds[pick].t0=now; kinds[pick].dur=7000+rnd()*6000;
+    if(pulseSet.size>5){ const first=pulseSet.values().next().value; pulseSet.delete(first); } }
+  kinds.forEach(k=>{ let target=0; if(pulseSet.has(kinds.indexOf(k))){ const p=(now-k.t0)/k.dur; target = p<1 ? Math.sin(Math.min(1,p*4)*1.5708)*(1-Math.max(0,p-0.75)*4) : 0; } k.pulse+=(target-k.pulse)*0.05; });
+  // extra firing inside pulsing kinds
+  pulseSet.forEach(ki=>{ const k=kinds[ki]; if(k.pulse<0.2) return; const n=dt*0.004*k.count*k.pulse; for(let i=0;i<Math.min(6,n);i++) flash(k.start+Math.floor(rnd()*k.count),0.9,600); });
+}
+
+// ---------- scenes ----------
+const capT=document.getElementById('cap-t'), capS=document.getElementById('cap-s'), capBox=document.getElementById('caption');
+let capTimer=null;
+function caption(t,s,hold){ capT.textContent=t; capS.textContent=s||''; capBox.classList.add('show'); clearTimeout(capTimer); if(hold!==Infinity) capTimer=setTimeout(()=>capBox.classList.remove('show'), hold||3200); }
+let sceneTimers=[]; let scene='resting';
+function at(ms,fn){ sceneTimers.push(setTimeout(fn,ms)); }
+function stopScene(){ sceneTimers.forEach(clearTimeout); sceneTimers=[]; marks.length=0; ambient=true; ambientLevel=1; genesis=null; gateMode=false; endLapse(); }
+function setScene(name){ stopScene(); scene=name; document.querySelectorAll('#rail button').forEach(b=>b.classList.toggle('on',b.dataset.scene===name)); document.getElementById('hud-focus').textContent = name==='resting'?'resting state · sample catalog':name+' · scripted replay';
+  if(mode!=='lobe' && name!=='resting' && name!=='genesis'){ setMode('lobe'); }
+  if(name==='thought') sceneThought(); else if(name==='cascade') sceneCascade(); else if(name==='gate') sceneGate(); else if(name==='genesis') sceneGenesis(); else if(name==='lapse') sceneLapse(); else caption('Resting state','spontaneous activity · ambient replay of recent traffic',2600); }
+function sceneThought(){
+  ambientLevel=0.3;
+  const A=clusterOfLobe(2),G=clusterOfLobe(1),R=clusterOfLobe(0),E=clusterOfLobe(3); const ci=c=>clusters.indexOf(c);
+  caption('Question arrives','"Why is AR over 90 days up at Facility 3 this quarter?"',Infinity);
+  sendPath([-1200,420,-300],[A.cx,A.cy,A.cz],{onEnd:()=>{ flashCluster(A,45,1.3,250); caption('Archetype fires','Diagnose candidate cause · chosen from 18 archetypes · 2 playbooks loaded',Infinity); }});
+  at(1900,()=>sendBundle(ci(A),ci(G),{size:1.3,onEnd:()=>{ flashCluster(G,14,1.4,200); caption('Governance gates it','3 metric standards · 1 data policy · row-level output refused',Infinity); }}));
+  at(3400,()=>sendBundle(ci(G),ci(R),{size:1.3,onEnd:()=>{ flashCluster(R,70,1.2,500); caption('Terms resolved','AR over 90 days → 14 data elements · 2 vocabulary terms · 1 taxonomy',Infinity); }}));
+  at(5000,()=>sendBundle(ci(R),ci(E),{size:1.5,onEnd:()=>{ flashCluster(E,320,1.3,1300); for(let i=0;i<60;i++) at(rnd()*1200,()=>{ const e=Math.floor(rnd()*INTRA); if(LOBE[EA[e]]===3) sendEdge(e,false); }); caption('Metrics computed','6 governed metrics · 1 data product (Accounts) · 412 ms',Infinity); }}));
+  at(7400,()=>sendBundle(ci(E),ci(A),{size:1.5,onEnd:()=>{ flashCluster(A,30,1.2,300); caption('Answer composed','contributors ranked · definitions cited · caveats attached',Infinity); }}));
+  at(9000,()=>{ emanate(1.3); sendPath([A.cx,A.cy,A.cz],[1250,460,-200],{onEnd:()=>caption('Answer returned','4 lobes · 1 thought · 2.1 s',3000)}); });
+  at(12500,()=>{ ambientLevel=1; document.querySelectorAll('#rail button').forEach(b=>b.classList.toggle('on',b.dataset.scene==='resting')); scene='resting'; document.getElementById('hud-focus').textContent='resting state · sample catalog'; });
+}
+function sceneCascade(){
+  ambientLevel=0.25;
+  const k=kinds.find(k=>k.name==='Metric'); const s=k.start+Math.floor(rnd()*k.count);
+  caption('Symptom observed','AR over 90 days · +11.4% vs prior quarter · Facility 3',Infinity);
+  flash(s,2,2500); marks.push({i:s,label:'SYMPTOM',rgb:[255,255,255]});
+  const seen=new Set([s]); let frontier=[s]; const hops=6;
+  for(let h=1;h<=hops;h++){ at(700+h*520,()=>{ const next=[]; frontier.forEach(i=>{ (ADJ[i]||[]).slice(0,4).forEach(j=>{ if(seen.has(j)||next.length>260) return; seen.add(j); next.push(j); flash(j,Math.max(0.35,1.3-h*0.15),900); }); });
+      for(let e=0;e<INTRA && next.length;e++){ if(seen.has(EA[e])&&seen.has(EB[e])&&rnd()<0.15) sendEdge(e,rnd()<0.5); }
+      frontier=next; caption('Traversing upstream',`hop ${h} of ${hops} · ${seen.size.toLocaleString()} candidates touched`,Infinity); }); }
+  at(700+hops*520+700,()=>{ const arr=[...seen].filter(i=>i!==s); const picks=[]; while(picks.length<5&&arr.length) picks.push(arr.splice(Math.floor(rnd()*arr.length),1)[0]);
+    const labels=['Denial rate · Payer X','Bill hold duration','835 adj. CO-197','Charge lag','Remit posting delay'];
+    picks.forEach((i,r)=>{ marks.push({i,label:`#${r+1} ${labels[r]}`,rgb:[255,196,90]}); flash(i,2,3000); });
+    caption('Candidates ranked','5 pockets scored for materiality, lift and persistence · owners attached',Infinity); });
+  at(700+hops*520+5200,()=>{ caption('Cascade complete','traversal, not causal proof · each candidate grounded to a definition',3000); ambientLevel=1; });
+}
+let gateMode=false;
+function sceneGate(){
+  ambientLevel=0.2; gateMode=true;
+  const G=clusterOfLobe(1),E=clusterOfLobe(3),A=clusterOfLobe(2); const ci=c=>clusters.indexOf(c);
+  caption('The gate','52 governance neurons hold 5,200 executable ones to standard',Infinity);
+  const burst=()=>{ if(!gateMode) return; const ok=rnd()<0.78; sendBundle(ci(E),ci(G),{size:1.1,speed:0.0016,burst:3,rgb:[255,140,70],onEnd:()=>{ flashCluster(G,ok?4:9,ok?0.9:1.8,120); if(ok) sendBundle(ci(G),ci(A),{size:0.9,speed:0.0018,burst:3,rgb:[255,196,90]}); else { sendBundle(ci(G),ci(E),{size:1.2,speed:0.0012,burst:8,rgb:[255,80,80]}); caption('Request refused','unregistered grain · rerouted for a definition',Infinity); } }}); sceneTimers.push(setTimeout(burst,180+rnd()*260)); };
+  burst(); burst();
+  at(2000,()=>caption('Standards applied','every executable request crosses the gate · 3 standards per request',Infinity));
+  at(10500,()=>{ gateMode=false; ambientLevel=1; caption('Gate closed','52 rules · 1,900 requests per minute at peak',3000); });
+}
+let lapse=null;
+function sceneLapse(){
+  ambientLevel=0.5; lapse={t0:now,realN:grownN,realS:grownS,realLive:LIVE,realGA:GA.length,seed:gseed};
+  caption('A year of growth',`${GROWTH.neuronsPerWeek} neurons and ${GROWTH.synapsesPerWeek} synapses per week, compounding ${GROWTH.compound*100}% per week`,Infinity);
+  at(16000,()=>{ caption('52 weeks later',`+${grownN-lapse.realN} neurons · +${grownS-lapse.realS} synapses · the catalog learned its way into new connections`,4000); at(4500,()=>{ endLapse(); }); });
+}
+function endLapse(){ if(!lapse) return; // undo the preview births, keep what the clock really earned
+  for(let e=GA.length-1;e>=lapse.realGA;e--){ const a=GA[e],b=GB[e]; if(ADJ[a]) ADJ[a].pop(); if(ADJ[b]) ADJ[b].pop(); }
+  GA.length=lapse.realGA; GB.length=lapse.realGA; LIVE=lapse.realLive; grownN=lapse.realN; grownS=lapse.realS; gseed=lapse.seed; lapse=null; refreshCounts(); document.getElementById('hud-grow').textContent=growthText(Date.now()); }
+let genesis=null;
+function sceneGenesis(){
+  ambient=false;
+  seed=4242; for(let i=0;i<LIVE;i++){ const a=rnd()*6.283, b=Math.acos(2*rnd()-1), d=1500+rnd()*900; X[i]=Math.sin(b)*Math.cos(a)*d; Y[i]=Math.sin(b)*Math.sin(a)*d*0.7; Z[i]=Math.cos(b)*d; DELAY[i]=rnd()*2600; }
+  genesis={t0:now,edgeAlpha:0,bundleAlpha:0};
+  caption('Neurogenesis','neurons form from 15 data products',Infinity);
+  at(2800,()=>caption('Lobes settle','grounding · governance · agent · executable',Infinity));
+  at(4200,()=>caption('Synaptogenesis',`${SYN_TOTAL.toLocaleString()} synapses form · bundles thicken with use`,Infinity));
+  at(7200,()=>{ ambient=true; caption('The brain is connected','resting state begins',3000); at(2000,()=>{ genesis=null; }); });
+}
+
+// ---------- modes / focus ----------
+let focus=null;
+function resetCam(){ camT.x=0; camT.y=-60; camT.z=0; camT.zoom=fitZoom(); }
+function lvlText(){ return mode==='lobe'?'L1 · LOBES':mode==='region'?'L1 · REGIONS':'L1 · KINDS'; }
+function setMode(m){ mode=m; focus=null; layout(m); placeGrown(); document.querySelectorAll('#top .seg [data-mode]').forEach(b=>b.classList.toggle('on',b.dataset.mode===m)); resetCam(); updateCrumb(); document.getElementById('hud-lvl').textContent=lvlText(); }
+function setFocus(ci){ focus=ci; const c=clusters[ci]; camT.x=c.cx; camT.y=c.cy; camT.z=c.cz; camT.zoom=Math.min(H*0.6/(c.r*2.2), W*0.6/(c.r*2.6)); updateCrumb(); document.getElementById('hud-lvl').textContent=(mode==='lobe'?'L2 · KINDS INSIDE ':'L2 · ')+c.name.toUpperCase(); }
+function clearFocus(){ focus=null; resetCam(); updateCrumb(); document.getElementById('hud-lvl').textContent=lvlText(); }
+function updateCrumb(){ const el=document.getElementById('crumb'); el.innerHTML=''; const root=document.createElement('button'); root.textContent='Cerebrum'; root.onclick=clearFocus; el.appendChild(root);
+  if(focus!==null){ const sep=document.createElement('span'); sep.className='sep'; sep.textContent='›'; el.appendChild(sep); const b=document.createElement('button'); b.className='here'; b.textContent=`${clusters[focus].name} · ${clusters[focus].count.toLocaleString()}`; el.appendChild(b);} else root.classList.add('here'); }
+document.querySelectorAll('#top .seg [data-mode]').forEach(b=>b.addEventListener('click',()=>{ if(scene!=='resting') setScene('resting'); setMode(b.dataset.mode); }));
+document.querySelectorAll('#rail button').forEach(b=>b.addEventListener('click',()=>setScene(b.dataset.scene)));
+document.getElementById('m-view').onclick=()=>{ document.getElementById('m-view').classList.add('on'); document.getElementById('m-edit').classList.remove('on'); caption('View','read-only explorer',1800); };
+document.getElementById('m-edit').onclick=()=>{ document.getElementById('m-edit').classList.add('on'); document.getElementById('m-view').classList.remove('on'); caption('Edit','add, connect or prune neurons · edits go to Proposals for review',2600); };
+// ---------- original ambient score (synthesized, no external audio) ----------
+let AC=null, master=null, scoreOn=false, scoreTimer=null;
+function makeReverb(ac){ const len=ac.sampleRate*5, buf=ac.createBuffer(2,len,ac.sampleRate); for(let c=0;c<2;c++){ const d=buf.getChannelData(c); for(let i=0;i<len;i++){ d[i]=(Math.random()*2-1)*Math.pow(1-i/len,2.6)*0.5; } } const cv=ac.createConvolver(); cv.buffer=buf; return cv; }
+function startScore(){
+  if(!AC){ AC=new (window.AudioContext||window.webkitAudioContext)(); master=AC.createGain(); master.gain.value=0; const lp=AC.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=2600; const rev=makeReverb(AC); const wet=AC.createGain(); wet.gain.value=0.55; const dry=AC.createGain(); dry.gain.value=0.7;
+    master.connect(lp); lp.connect(dry); lp.connect(rev); rev.connect(wet); dry.connect(AC.destination); wet.connect(AC.destination); }
+  AC.resume(); master.gain.cancelScheduledValues(AC.currentTime); master.gain.linearRampToValueAtTime(0.32, AC.currentTime+4);
+  // chord cycle in A minor, organ-like stacks, 14 s per chord
+  const chords=[[110,164.81,220,261.63,329.63],[87.31,130.81,174.61,220,261.63],[98,146.83,196,246.94,293.66],[82.41,123.47,164.81,196,246.94]];
+  let step=0; const bar=14;
+  const voice=(f,t,dur,g,type)=>{ const o=AC.createOscillator(); o.type=type; o.frequency.value=f; const d=AC.createOscillator(); d.type=type; d.frequency.value=f*1.003; const v=AC.createGain(); v.gain.setValueAtTime(0,t); v.gain.linearRampToValueAtTime(g,t+dur*0.35); v.gain.setValueAtTime(g,t+dur*0.7); v.gain.linearRampToValueAtTime(0,t+dur+1.5); o.connect(v); d.connect(v); v.connect(master); o.start(t); d.start(t); o.stop(t+dur+2); d.stop(t+dur+2); };
+  const tick=(f,t)=>{ const o=AC.createOscillator(); o.type='sine'; o.frequency.value=f; const v=AC.createGain(); v.gain.setValueAtTime(0,t); v.gain.linearRampToValueAtTime(0.09,t+0.01); v.gain.exponentialRampToValueAtTime(0.0008,t+0.9); o.connect(v); v.connect(master); o.start(t); o.stop(t+1); };
+  // lookahead scheduler on the audio clock: chords and the 96 bpm pulse are booked ahead, so a late timer never leaves a gap
+  const beat=60/96; let nextBar=AC.currentTime+0.15, nextBeat=nextBar, beatNo=0, curCh=chords[0];
+  const schedule=()=>{ if(!scoreOn) return; const horizon=AC.currentTime+2.5;
+    while(nextBar<horizon){ curCh=chords[step%chords.length]; const t=nextBar; curCh.forEach((f,i)=>{ voice(f,t,bar,i===0?0.07:0.045,i<2?'triangle':'sine'); if(i===0) voice(f*0.5,t,bar,0.05,'sine'); }); step++; nextBar+=bar; }
+    while(nextBeat<horizon){ const f=(beatNo%2?curCh[3]:curCh[4])*2; tick(f,nextBeat); if(beatNo%8===0) tick(curCh[0]*4,nextBeat); nextBeat+=beat; beatNo++; }
+    scoreTimer=setTimeout(schedule,400); };
+  scoreOn=true; schedule();
+}
+// granular layer: one grain per impulse, pitched by lobe, timed by the impulse itself
+const LOBE_PITCH=[523.25,783.99,659.25,440]; // grounding C5, governance G5, agent E5, executable A4
+let grainBudget=0, lastGrainT=0;
+function grain(li,amp,speed,x){
+  if(!scoreOn||!AC) return; const tnow=AC.currentTime; grainBudget=Math.min(40,grainBudget+(tnow-lastGrainT)*90); lastGrainT=tnow; if(grainBudget<1) return; grainBudget--;
+  if(!(li>=0)) li=Math.floor(Math.random()*4); if(!isFinite(speed)) speed=0.001; if(!isFinite(x)) x=W/2; if(!isFinite(amp)) amp=1;
+  const base=LOBE_PITCH[li%4]*(Math.random()<0.5?1:2)*(1+(Math.random()-0.5)*0.012); const dur=Math.max(0.02,0.14-speed*40+Math.random()*0.05);
+  const o=AC.createOscillator(); o.type=Math.random()<0.6?'sine':'triangle'; o.frequency.setValueAtTime(base*1.4,tnow); o.frequency.exponentialRampToValueAtTime(base,tnow+dur*0.6);
+  const bp=AC.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=base*2; bp.Q.value=3;
+  const g=AC.createGain(); g.gain.setValueAtTime(0,tnow); g.gain.linearRampToValueAtTime(0.05*amp,tnow+0.004); g.gain.exponentialRampToValueAtTime(0.0005,tnow+dur);
+  const pan=AC.createStereoPanner?AC.createStereoPanner():null; if(pan) pan.pan.value=Math.max(-1,Math.min(1,(x/W-0.5)*1.8));
+  o.connect(bp); bp.connect(g); if(pan){ g.connect(pan); pan.connect(master); } else g.connect(master); o.start(tnow); o.stop(tnow+dur+0.02);
+}
+function sparkSound(amp){
+  if(!scoreOn||!AC) return; const tnow=AC.currentTime; const len=AC.sampleRate*0.6, buf=AC.createBuffer(1,len,AC.sampleRate), d=buf.getChannelData(0); for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,3);
+  const src=AC.createBufferSource(); src.buffer=buf; const hp=AC.createBiquadFilter(); hp.type='highpass'; hp.frequency.setValueAtTime(6000,tnow); hp.frequency.exponentialRampToValueAtTime(900,tnow+0.5);
+  const g=AC.createGain(); g.gain.value=0.12*amp; src.connect(hp); hp.connect(g); g.connect(master); src.start(tnow);
+  const o=AC.createOscillator(); o.type='sine'; o.frequency.setValueAtTime(1760,tnow); o.frequency.exponentialRampToValueAtTime(220,tnow+0.9); const v=AC.createGain(); v.gain.setValueAtTime(0.08*amp,tnow); v.gain.exponentialRampToValueAtTime(0.0005,tnow+1.2); o.connect(v); v.connect(master); o.start(tnow); o.stop(tnow+1.3);
+}
+function stopScore(){ scoreOn=false; clearTimeout(scoreTimer); if(master){ master.gain.cancelScheduledValues(AC.currentTime); master.gain.linearRampToValueAtTime(0,AC.currentTime+2.5); } }
+let scoreWanted=true;
+function tryStart(){ if(!scoreWanted||scoreOn) return; try{ startScore(); if(AC.state!=='running'){ AC.resume().catch(()=>{}); } }catch(e){} }
+document.getElementById('snd').onclick=function(ev){ ev.stopPropagation(); if(scoreWanted){ scoreWanted=false; stopScore(); this.textContent='Sound off'; this.setAttribute('aria-pressed','false'); } else { scoreWanted=true; this.textContent='Sound on'; this.setAttribute('aria-pressed','true'); tryStart(); caption('Score','original ambient organ · synthesized live in the page',2600); } };
+['pointerdown','keydown','touchstart'].forEach(ev=>addEventListener(ev,tryStart,{capture:true}));
+tryStart();
+function resetCanvas(){
+  stopScene(); scene='resting'; document.querySelectorAll('#rail button').forEach(b=>b.classList.toggle('on',b.dataset.scene==='resting'));
+  signals.length=0; flashes.length=0; rings.length=0; marks.length=0; pulseSet.clear(); kinds.forEach(k=>{ k.pulse=0; }); pulseNext=now+1500; ingressNext=now+2500; bundles.forEach(b=>b.acc=0); subBundles.forEach(b=>b.acc=0);
+  document.getElementById('find').value=''; document.getElementById('tip').style.display='none'; hover=-1;
+  setMode('lobe'); for(let i=0;i<LIVE;i++){ X[i]=TX[i]; Y[i]=TY[i]; Z[i]=TZ[i]; }
+  camT.yaw=-0.35; camT.pitch=0.28; cam.yaw=camT.yaw; cam.pitch=camT.pitch; cam.x=camT.x; cam.y=camT.y; cam.z=camT.z; cam.zoom=camT.zoom; autoOrbit=true;
+  document.getElementById('m-view').classList.add('on'); document.getElementById('m-edit').classList.remove('on');
+  document.getElementById('hud-focus').textContent='resting state · sample catalog';
+  caption('Canvas reset','L1 lobes · home camera · resting state',2400);
+}
+document.getElementById('reset').onclick=resetCanvas;
+addEventListener('keydown',ev=>{ if((ev.key==='r'||ev.key==='R') && document.activeElement!==document.getElementById('find')) resetCanvas(); });
+document.getElementById('fs').onclick=()=>{ const el=document.documentElement; (el.requestFullscreen?el.requestFullscreen():Promise.reject()).catch(()=>caption('Full screen unavailable','use the browser’s own full-screen control',2400)); };
+document.getElementById('find').addEventListener('keydown',ev=>{ if(ev.key!=='Enter') return; const q=ev.target.value.trim().toLowerCase(); if(!q) return;
+  const ci=clusters.findIndex(c=>c.name.toLowerCase().includes(q)); if(ci>=0){ setFocus(ci); caption(clusters[ci].name,`${clusters[ci].count.toLocaleString()} neurons · ${clusters[ci].sub}`,2600); return; }
+  const ki=kinds.findIndex(k=>k.name.toLowerCase().includes(q)); if(ki>=0){ const k=kinds[ki]; const cl=clusters.findIndex(c=>c.range[0]<=k.start&&c.range[1]>=k.start); setFocus(cl); flashCluster({range:[k.start,k.start+k.count-1]},Math.min(40,k.count),1.6,400); caption(k.name,`${k.count.toLocaleString()} neurons · ${families[k.fam].name} · ${LOBES[k.lobe].name} lobe`,3000); return; }
+  caption('Nothing found',`"${ev.target.value}" is not in the catalog`,2200); });
+addEventListener('keydown',ev=>{ if(ev.key==='Escape'){ if(focus!==null) clearFocus(); document.getElementById('find').blur(); } });
+
+// pointer: drag orbits (CAD style), shift or right button pans, wheel zooms, click opens
+let drag=null, hover=-1;
+cv.addEventListener('contextmenu',ev=>ev.preventDefault());
+cv.addEventListener('pointerdown',ev=>{ drag={x:ev.clientX,y:ev.clientY,yaw:camT.yaw,pitch:camT.pitch,cx:camT.x,cy:camT.y,cz:camT.z,moved:false,pan:ev.shiftKey||ev.button===2||ev.button===1}; cv.setPointerCapture(ev.pointerId); cv.classList.add('drag'); autoOrbit=false; lastInput=now; });
+cv.addEventListener('pointermove',ev=>{ lastInput=now;
+  if(drag){ const dx=ev.clientX-drag.x,dy=ev.clientY-drag.y; if(Math.hypot(dx,dy)>4) drag.moved=true;
+    if(drag.pan){ // pan in the camera plane
+      const s=1/(cam.zoom*1.1); const px=-dx*s, py=-dy*s; // camera-right and camera-up in world space
+      camT.x=drag.cx+px*cy_ - py*(-sp_*sy_); camT.y=drag.cy+py*cp_; camT.z=drag.cz+px*(-sy_) - py*(sp_*cy_);
+    } else { camT.yaw=drag.yaw+dx*0.005; camT.pitch=Math.max(-1.3,Math.min(1.3,drag.pitch+dy*0.005)); }
+    return; }
+  hover=-1; let best=1e9; clusters.forEach((c,i)=>{ proj(c.cx,c.cy,c.cz,P); const d=Math.hypot(ev.clientX-P[0],ev.clientY-P[1]); const rr=c.r*P[2]*cam.zoom*0.95; if(d<rr && d<best){best=d;hover=i;} });
+  cv.classList.toggle('hover',hover>=0); const tip=document.getElementById('tip'); if(hover>=0){ const c=clusters[hover]; tip.style.display='block'; tip.style.left=(ev.clientX+14)+'px'; tip.style.top=(ev.clientY+14)+'px'; tip.innerHTML=`<b>${c.name}</b>${c.count.toLocaleString()} neurons · ${c.sub}<br>${bundles.filter(b=>b.a===hover||b.b===hover).reduce((a,b)=>a+b.n,0).toLocaleString()} synapses to other ${mode==='lobe'?'lobes':'clusters'}`; } else tip.style.display='none'; });
+cv.addEventListener('pointerup',ev=>{ if(drag&&!drag.moved&&hover>=0&&!drag.pan){ if(focus===hover) clearFocus(); else setFocus(hover); } drag=null; cv.classList.remove('drag'); });
+cv.addEventListener('wheel',ev=>{ ev.preventDefault(); autoOrbit=false; lastInput=now; const f=Math.exp(-ev.deltaY*0.0012); camT.zoom=Math.max(0.12,Math.min(6,camT.zoom*f)); },{passive:false});
+
+// ---------- render ----------
+let now=performance.now(), last=now;
+function frame(t){ try{ frameInner(t); }catch(err){ console.error(err); } requestAnimationFrame(frame); }
+function frameInner(t){
+  now=t; const dt=Math.min(50,t-last); last=t;
+  if(!autoOrbit && now-lastInput>9000 && !drag) autoOrbit=true;
+  if(autoOrbit && !reduced) camT.yaw+=dt*0.00004;
+  cam.x+=(camT.x-cam.x)*0.08; cam.y+=(camT.y-cam.y)*0.08; cam.z+=(camT.z-cam.z)*0.08; cam.zoom+=(camT.zoom-cam.zoom)*0.08; cam.yaw+=(camT.yaw-cam.yaw)*0.12; cam.pitch+=(camT.pitch-cam.pitch)*0.12;
+  cy_=Math.cos(cam.yaw); sy_=Math.sin(cam.yaw); cp_=Math.cos(cam.pitch); sp_=Math.sin(cam.pitch);
+  const breathe = reduced?0:1;
+  const gen=genesis; const gt=gen?now-gen.t0:0;
+  for(let i=0;i<LIVE;i++){ if(gen && gt<DELAY[i]) continue; const ease=gen?0.045:0.07; X[i]+=(TX[i]-X[i])*ease; Y[i]+=(TY[i]-Y[i])*ease; Z[i]+=(TZ[i]-Z[i])*ease; }
+  if(gen){ gen.edgeAlpha=Math.max(0,Math.min(1,(gt-4200)/2200)); gen.bundleAlpha=Math.max(0,Math.min(1,(gt-5200)/2000)); }
+  if(lapse){ const wk=Math.min(52,(now-lapse.t0)/16000*52); const ms=Date.now()+wk*604800000; growTo(ms,true); refreshCounts(); document.getElementById('hud-grow').textContent='time-lapse · week '+Math.floor(wk)+' · '+growthText(ms).replace(/^age [^·]*· /,''); }
+  ambientTick(dt);
+  for(let s=signals.length-1;s>=0;s--){ const g=signals[s]; if(g.t===0 && scoreOn){ const li=g.kind==='edge'?LOBE[EA[g.e]]:g.kind==='fiber'?g.f.lobe:LOBES.findIndex(L=>L.rgb===g.rgb); grain(li<0?Math.floor(Math.random()*4):li, g.kind==='bundle'?1:g.kind==='sub'?0.7:0.45, g.speed, W/2); }
+    g.t+=g.speed*dt; if(g.t>=1){ if(scoreOn && g.kind!=='edge'){ let px=W/2; if(g.kind==='bundle'||g.kind==='sub'){ const q=bez3(g.g,g.rev?0:1); proj(q[0],q[1],q[2],P); px=P[0]; } grain(g.kind==='fiber'?g.f.lobe:LOBES.findIndex(L=>L.rgb===g.rgb), g.kind==='bundle'?1.3:0.6, g.speed*1.6, px); } if(g.kind==='bundle'&&g.burst&&g.target!==undefined) flashCluster(clusters[g.target],g.burst,0.9,150); if(g.kind==='sub'&&g.target) flash(g.target.start+Math.floor(rnd()*g.target.count),0.8,600); if(g.kind==='fiber') flash(g.rev?g.f.a:g.f.b,0.7,500); if(g.kind==='grow') flash(g.b,1.4,900); if(g.onEnd) g.onEnd(); signals.splice(s,1);} }
+  for(let f=flashes.length-1;f>=0;f--) if(now-flashes[f].t0>flashes[f].dur) flashes.splice(f,1);
+  if(now-lastRateT>1000){ document.getElementById('hud-sig').textContent=sigCount; sigCount=0; lastRateT=now; document.getElementById('hud-fire').textContent=flashes.length;
+    if(!lapse){ const before=grownN+grownS; growTo(Date.now(),true); if(grownN+grownS!==before){ refreshCounts(); caption('The brain grew',growthText(Date.now()),3000); } document.getElementById('hud-grow').textContent=growthText(Date.now()); } }
+  // project all neurons
+  for(let i=0;i<LIVE;i++){ proj(X[i]+Math.sin(t*0.0006+PH[i])*2.5*breathe, Y[i]+Math.cos(t*0.0005+PH[i])*2.5*breathe, Z[i]+Math.sin(t*0.0004+PH[i]*2)*2.5*breathe, P); PX[i]=P[0]; PY[i]=P[1]; PS[i]=P[2]; }
+
+  ctx.setTransform(DPR,0,0,DPR,0,0); ctx.clearRect(0,0,W,H);
+  const vg=ctx.createRadialGradient(W/2,H/2,H*0.1,W/2,H/2,Math.max(W,H)*0.75); vg.addColorStop(0,'#0b0d1a'); vg.addColorStop(1,'#05060b'); ctx.fillStyle=vg; ctx.fillRect(0,0,W,H);
+  // aura
+  { const ep=(now-aura.emanT0)/3200; const e=ep<1?Math.sin(ep*Math.PI)*(aura.emanStr||1):0; aura.eman=e;
+    proj(0,-60,0,P); const cx=P[0],cy=P[1]; const breath=0.5+0.5*Math.sin(t*0.00045)*breathe; const R=(1700*cam.zoom*P[2])*(1+0.08*breath+0.3*Math.min(1.2,e));
+    const a=(0.045+0.025*breath+0.085*Math.min(1.2,e))*(reduced?0.7:1);
+    for(let n=0;n<2;n++){ ctx.save(); ctx.translate(cx,cy); ctx.rotate((n?-1:1)*t*0.000012+n*1.3); ctx.scale(1+0.15*n,0.78); ctx.globalAlpha=a*(n?0.7:1); ctx.drawImage(NEB[n],-R*(1+0.3*n),-R*(1+0.3*n),R*2*(1+0.3*n),R*2*(1+0.3*n)); ctx.restore(); }
+    ctx.globalAlpha=1; }
+  // substrate
+  ctx.strokeStyle='rgba(120,135,190,0.05)'; ctx.lineWidth=1; ctx.beginPath(); MESHE.forEach(([i,j])=>{ proj(MESH[i].x,MESH[i].y,MESH[i].z,P); const x1=P[0],y1=P[1]; proj(MESH[j].x,MESH[j].y,MESH[j].z,P); ctx.moveTo(x1,y1); ctx.lineTo(P[0],P[1]); }); ctx.stroke();
+  STARS.forEach(s=>{ if(!reduced){ s.x+=s.vx*dt; s.y+=s.vy*dt; s.z+=s.vz*dt; if(s.x>2700)s.x=-2700; if(s.x<-2700)s.x=2700; if(s.z>1600)s.z=-1600; if(s.z<-1600)s.z=1600; if(s.y>1800)s.y=-1800; if(s.y<-1800)s.y=1800; }
+    proj(s.x,s.y,s.z,P); if(P[0]<0||P[0]>W||P[1]<0||P[1]>H) return; const a=(0.1+0.25*s.s*(0.6+0.4*Math.sin(t*0.0007+s.p)*breathe))*Math.min(1,P[2]);
+    if(s.mote){ const x1=P[0],y1=P[1]; proj(s.x-s.vx*260,s.y-s.vy*260,s.z-s.vz*260,P); ctx.strokeStyle=`rgba(170,195,240,${a*0.5})`; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(P[0],P[1]); ctx.lineTo(x1,y1); ctx.stroke(); ctx.fillStyle=`rgba(200,215,250,${Math.min(1,a*2)})`; ctx.fillRect(x1-1,y1-1,2.4,2.4); }
+    else { ctx.fillStyle=`rgba(170,185,230,${a})`; ctx.fillRect(P[0],P[1],1.2*P[2],1.2*P[2]); } });
+  // entry sparks
+  for(let r=rings.length-1;r>=0;r--){ const g=rings[r]; const p=(now-g.t0)/(g.soft?2600:900); if(p>=1){ rings.splice(r,1); continue; } proj(g.x,g.y,g.z,P); const R=(20+220*p*g.amp)*cam.zoom*P[2]; if(g.soft){ ctx.strokeStyle=`rgba(${g.rgb.join(',')},${(1-p)*0.12})`; ctx.lineWidth=22*(1-p)+2; ctx.beginPath(); ctx.arc(P[0],P[1],R,0,6.283); ctx.stroke(); continue; } ctx.strokeStyle=`rgba(255,255,255,${(1-p)*0.7})`; ctx.lineWidth=2*(1-p)+0.5; ctx.beginPath(); ctx.arc(P[0],P[1],R,0,6.283); ctx.stroke(); ctx.strokeStyle=`rgba(${g.rgb.join(',')},${(1-p)*0.5})`; ctx.beginPath(); ctx.arc(P[0],P[1],R*0.6,0,6.283); ctx.stroke(); if(p<0.35){ const s=(1-p/0.35)*90*g.amp*cam.zoom*P[2]; ctx.globalAlpha=(1-p/0.35); ctx.drawImage(SPR_WHITE,P[0]-s/2,P[1]-s/2,s,s); ctx.globalAlpha=1; } }
+
+  // halos (clusters + pulsing kinds)
+  const halo=(x,y,R,rgb,a)=>{ if(x<-R||x>W+R||y<-R||y>H+R||R<2) return; const g=ctx.createRadialGradient(x,y,0,x,y,R); g.addColorStop(0,`rgba(${rgb.join(',')},${a})`); g.addColorStop(0.5,`rgba(${rgb.join(',')},${a*0.3})`); g.addColorStop(1,`rgba(${rgb.join(',')},0)`); ctx.fillStyle=g; ctx.beginPath(); ctx.arc(x,y,R,0,6.283); ctx.fill(); };
+  clusters.forEach((c,ci)=>{ const dim=(focus!==null&&focus!==ci)?0.35:1; const b=1+0.06*Math.sin(t*0.0009+ci)*breathe; proj(c.cx,c.cy,c.cz,P); halo(P[0],P[1],c.r*cam.zoom*P[2]*1.5*b,c.rgb,0.15*dim); });
+  kinds.forEach(k=>{ if(k.pulse<0.02) return; proj(k.cx,k.cy,k.cz,P); const b=1+0.25*Math.sin(t*0.004+k.phase); halo(P[0],P[1],k.r*cam.zoom*P[2]*1.3*b,LOBES[k.lobe].rgb,0.35*k.pulse*(0.7+0.3*Math.sin(t*0.004+k.phase))); });
+
+  // bundles (drawn as polylines through 3D bezier)
+  const bA = gen?gen.bundleAlpha:1;
+  if(bA>0) bundles.forEach(b=>{ const g=bundleGeom(b); const A=clusters[b.a],B=clusters[b.b]; const dim=(focus!==null&&focus!==b.a&&focus!==b.b)?0.3:1;
+    const pts=[]; for(let i=0;i<=16;i++){ const q=bez3(g,i/16); proj(q[0],q[1],q[2],P); pts.push([P[0],P[1],P[2]]); }
+    const w=(1+5.5*Math.log10(b.n)/3.7)*Math.max(0.5,Math.sqrt(cam.zoom))*pts[8][2];
+    const grad=ctx.createLinearGradient(pts[0][0],pts[0][1],pts[16][0],pts[16][1]); grad.addColorStop(0,`rgba(${A.rgb.join(',')},${0.22*bA*dim})`); grad.addColorStop(1,`rgba(${B.rgb.join(',')},${0.22*bA*dim})`);
+    ctx.strokeStyle=grad; ctx.lineCap='round'; ctx.lineJoin='round';
+    for(let k=-1;k<=1;k++){ ctx.lineWidth=k===0?w:w*0.5; ctx.globalAlpha=k===0?1:0.5; ctx.beginPath(); pts.forEach((p,i)=>{ const o=k*w*1.4*Math.sin(i/16*Math.PI); if(i===0) ctx.moveTo(p[0],p[1]); else ctx.lineTo(p[0]+o,p[1]+o*0.7); }); ctx.stroke(); }
+    ctx.globalAlpha=1; });
+
+  // sub-bundles and fibers
+  const eA = gen?gen.edgeAlpha:1;
+  if(bA>0){ ctx.lineCap='round'; ctx.lineJoin='round';
+    subBundles.forEach(b=>{ const g=subGeom(b); const A=kinds[b.a],B=kinds[b.b]; const dim=(focus!==null && clusters[focus].lobe!==A.lobe && clusters[focus].lobe!==B.lobe)?0.3:1;
+      ctx.beginPath(); for(let i=0;i<=10;i++){ const q=bez3(g,i/10); proj(q[0],q[1],q[2],P); if(i===0) ctx.moveTo(P[0],P[1]); else ctx.lineTo(P[0],P[1]); }
+      const grad=ctx.createLinearGradient(0,0,W,0); grad.addColorStop(0,`rgba(${LOBES[A.lobe].rgb.join(',')},${0.14*bA*dim})`); grad.addColorStop(1,`rgba(${LOBES[B.lobe].rgb.join(',')},${0.14*bA*dim})`);
+      ctx.strokeStyle=grad; ctx.lineWidth=(0.6+2.2*Math.log10(b.n)/2.5)*Math.max(0.5,Math.sqrt(cam.zoom))*P[2]; ctx.stroke(); });
+    if(GA.length){ ctx.lineWidth=Math.max(0.6,0.8*cam.zoom); ctx.strokeStyle=`rgba(235,240,255,${0.16*eA})`; ctx.beginPath(); for(let e=0;e<GA.length;e++){ const a=GA[e],b=GB[e]; if(a>=LIVE||b>=LIVE) continue; ctx.moveTo(PX[a],PY[a]); ctx.lineTo(PX[b],PY[b]); } ctx.stroke(); }
+    ctx.lineWidth=Math.max(0.4,0.5*cam.zoom);
+    LOBES.forEach((L,li)=>{ ctx.strokeStyle=`rgba(${L.rgb.join(',')},${0.07*bA*eA})`; ctx.beginPath();
+      fibers.forEach(f=>{ if(f.lobe!==li) return; const g=fiberGeom(f); for(let i=0;i<=6;i++){ const q=bez3(g,i/6); proj(q[0],q[1],q[2],P); if(i===0) ctx.moveTo(P[0],P[1]); else ctx.lineTo(P[0],P[1]); } });
+      ctx.stroke(); }); }
+  // intra synapses
+  if(eA>0 && cam.zoom>0.2){ ctx.lineWidth=Math.max(0.5,0.6*cam.zoom);
+    LOBES.forEach((L,li)=>{ const dim=(focus!==null&&clusters[focus].lobe!==li&&mode==='lobe')?0.25:1; ctx.strokeStyle=`rgba(${L.rgb.join(',')},${0.11*eA*dim})`; ctx.beginPath();
+      for(let n=0;n<DRAW_E.length;n++){ const e=DRAW_E[n]; const a=EA[e]; if(LOBE[a]!==li) continue; const b=EB[e]; const x1=PX[a],y1=PY[a],x2=PX[b],y2=PY[b]; if((x1<0&&x2<0)||(x1>W&&x2>W)||(y1<0&&y2<0)||(y1>H&&y2>H)) continue; ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); }
+      ctx.stroke(); }); }
+
+  // neurons
+  const base=Math.max(3,Math.min(14,5*cam.zoom));
+  for(let i=0;i<LIVE;i++){ const x=PX[i],y=PY[i]; if(x<-10||x>W+10||y<-10||y>H+10) continue;
+    const li=LOBE[i]; const born=BORN[i]?Math.min(1,(now-BORN[i])/2500):1; const s=base*SZ[i]*PS[i]*(0.3+0.7*born); const dimmed = focus!==null && !inCluster(i,clusters[focus]);
+    const pulse=kinds[KIND[i]].pulse; const pb = pulse>0.02 ? 1+pulse*0.8*(0.5+0.5*Math.sin(t*0.004+kinds[KIND[i]].phase+PH[i]*0.3)) : 1;
+    ctx.globalAlpha = Math.min(1,(dimmed?0.35:(0.5+0.5*BR[i]))*pb*Math.min(1,PS[i]+0.2)); ctx.drawImage((BR[i]>0.72||pb>1.4)?SPR[li]:SPR_DIM[li], x-s/2, y-s/2, s, s); }
+  ctx.globalAlpha=1;
+  flashes.forEach(f=>{ const p=(now-f.t0)/f.dur; const a=Math.sin(p*Math.PI)*f.amp; const s=base*(3.2+2.5*f.amp)*(0.7+0.3*(1-p))*PS[f.i]; const x=PX[f.i],y=PY[f.i]; ctx.globalAlpha=Math.min(1,a); ctx.drawImage(SPR_FLASH[LOBE[f.i]],x-s/2,y-s/2,s,s); if(f.amp>1.2){ ctx.globalAlpha=Math.min(1,a*0.6); ctx.drawImage(SPR_WHITE,x-s/3,y-s/3,s*0.66,s*0.66);} });
+  ctx.globalAlpha=1;
+  // signals
+  signals.forEach(g=>{ const tt=g.rev?1-g.t:g.t, tp=g.rev?1-Math.max(0,g.t-0.07):Math.max(0,g.t-0.07); let q,q0;
+    if(g.kind==='bundle'||g.kind==='sub'){ q=bez3(g.g,tt); q0=bez3(g.g,tp); } else if(g.kind==='fiber'){ const gg=fiberGeom(g.f); q=bez3(gg,tt); q0=bez3(gg,tp); } else if(g.kind==='grow'){ const a=g.a,b=g.b; q=[X[a]+(X[b]-X[a])*tt,Y[a]+(Y[b]-Y[a])*tt,Z[a]+(Z[b]-Z[a])*tt]; q0=[X[a],Y[a],Z[a]]; } else { const a=EA[g.e],b=EB[g.e]; q=[X[a]+(X[b]-X[a])*tt,Y[a]+(Y[b]-Y[a])*tt,Z[a]+(Z[b]-Z[a])*tt]; q0=[X[a]+(X[b]-X[a])*tp,Y[a]+(Y[b]-Y[a])*tp,Z[a]+(Z[b]-Z[a])*tp]; }
+    proj(q[0],q[1],q[2],P); const X1=P[0],Y1=P[1],ds=P[2]; proj(q0[0],q0[1],q0[2],P); const X0=P[0],Y0=P[1];
+    const grad=ctx.createLinearGradient(X0,Y0,X1,Y1); grad.addColorStop(0,`rgba(${g.rgb.join(',')},0)`); grad.addColorStop(1,`rgba(${g.rgb.join(',')},0.9)`);
+    ctx.strokeStyle=grad; ctx.lineWidth=Math.max(1,2.2*g.size*Math.sqrt(cam.zoom)*ds); ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(X0,Y0); ctx.lineTo(X1,Y1); ctx.stroke();
+    const s=base*(1.6+1.6*g.size)*ds; ctx.drawImage(g.kind==='edge'?SPR_FLASH[LOBE[EA[g.e]]]:(g.kind==='bundle'?SPR_WHITE:SPR_FLASH[LOBES.indexOf(LOBES.find(L=>L.rgb===g.rgb))<0?0:LOBES.findIndex(L=>L.rgb===g.rgb)]),X1-s/2,Y1-s/2,s,s); });
+
+  // labels
+  ctx.textAlign='center'; ctx.textBaseline='top';
+  clusters.forEach((c,ci)=>{ proj(c.cx,c.cy+c.r*0.9,c.cz,P); const x=P[0],y=P[1]+10; const vis=c.r*cam.zoom*P[2]; if(vis<16 && ci!==hover && ci!==focus) return; if(x<-200||x>W+200||y<-40||y>H+40) return;
+    const dim=(focus!==null&&focus!==ci)?0.45:1; const big=mode==='lobe'||ci===focus||ci===hover;
+    ctx.font=`600 ${big?15:11}px "Chakra Petch", sans-serif`; ctx.fillStyle=`rgba(232,235,245,${0.95*dim})`; ctx.fillText(c.name.toUpperCase(),x,y);
+    ctx.font=`500 ${big?12:10}px "JetBrains Mono", monospace`; ctx.fillStyle=`rgba(${c.rgb.join(',')},${0.95*dim})`; let gc=0; for(let i=COUNT;i<LIVE;i++) if(c.kindSet.has(KIND[i])) gc++; ctx.fillText((c.count+gc).toLocaleString()+(big?'  ·  '+c.sub:''),x,y+(big?19:14)); });
+  if(focus!==null && clusters[focus].children.length){ ctx.font='500 11px "JetBrains Mono", monospace'; clusters[focus].children.forEach(ch=>{ const k=kinds[ch.ki]; proj(ch.cx,ch.cy-ch.r*0.6,ch.cz,P); ctx.fillStyle='rgba(232,235,245,0.8)'; ctx.fillText(k.name+' · '+k.count.toLocaleString(),P[0],P[1]-6); }); }
+  if(marks.length){ ctx.font='500 11px "JetBrains Mono", monospace'; ctx.textAlign='left'; marks.forEach(m=>{ const x=PX[m.i],y=PY[m.i]; ctx.strokeStyle=`rgba(${m.rgb.join(',')},0.9)`; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(x,y,base*1.6,0,6.283); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x+base*1.6,y); ctx.lineTo(x+base*1.6+18,y-14); ctx.lineTo(x+base*1.6+26,y-14); ctx.stroke(); ctx.fillStyle='rgba(7,8,15,0.75)'; const w=ctx.measureText(m.label).width+10; ctx.fillRect(x+base*1.6+28,y-22,w,16); ctx.fillStyle=`rgba(${m.rgb.join(',')},1)`; ctx.fillText(m.label,x+base*1.6+33,y-20); }); }
+}
+growTo(Date.now(),false); refreshCounts(); document.getElementById('hud-grow').textContent=growthText(Date.now());
+resize(); updateCrumb(); caption('Resting state','spontaneous activity · ambient replay of recent traffic',3000);
+requestAnimationFrame(frame);
+})();
+</script>
