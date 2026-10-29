@@ -464,10 +464,10 @@ function sparkSound(amp){
 }
 function stopScore(){ scoreOn=false; clearTimeout(scoreTimer); if(master){ master.gain.cancelScheduledValues(AC.currentTime); master.gain.linearRampToValueAtTime(0,AC.currentTime+2.5); } }
 let scoreWanted=true;
-function tryStart(){ if(!scoreWanted||scoreOn) return; try{ startScore(); if(AC.state!=='running'){ AC.resume().catch(()=>{}); } }catch(e){} }
+function tryStart(){ if(!scoreWanted) return; try{ if(!scoreOn) startScore(); if(AC && AC.state!=='running'){ AC.resume().catch(()=>{}); } }catch(e){} }
 document.getElementById('snd').onclick=function(ev){ ev.stopPropagation(); if(scoreWanted){ scoreWanted=false; stopScore(); this.textContent='Sound off'; this.setAttribute('aria-pressed','false'); } else { scoreWanted=true; this.textContent='Sound on'; this.setAttribute('aria-pressed','true'); tryStart(); caption('Score','original ambient organ · synthesized live in the page',2600); } };
-['pointerdown','keydown','touchstart'].forEach(ev=>addEventListener(ev,tryStart,{capture:true}));
-tryStart();
+['pointerdown','keydown','touchstart','click'].forEach(ev=>addEventListener(ev,tryStart,{capture:true}));
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) tryStart(); });
 function resetCanvas(){
   stopScene(); scene='resting'; document.querySelectorAll('#rail button').forEach(b=>b.classList.toggle('on',b.dataset.scene==='resting'));
   signals.length=0; flashes.length=0; rings.length=0; marks.length=0; pulseSet.clear(); kinds.forEach(k=>{ k.pulse=0; }); pulseNext=now+1500; ingressNext=now+2500; bundles.forEach(b=>b.acc=0); subBundles.forEach(b=>b.acc=0);
