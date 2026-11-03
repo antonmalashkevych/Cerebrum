@@ -36,3 +36,10 @@ window.Cerebrum.setData({
 `window.Cerebrum.loader.show(title, subtitle)` and `.hide()` show a close-up neuron animation (dendrites and axon growing,
 impulses travelling, the view pulling back, synapses forming with other neurons). Use it while the catalog is loading or
 a request is slow; the drill build shows it on first paint and while a lobe's data is being read.
+
+### Sankey impulses (drill build)
+
+Each ribbon has a centerline cubic; an impulse is an SVG `<circle class="imp">` with `offset-path: path("…")` and a CSS
+`offset-distance` animation from 0% to 100%, removed on `animationend`. About one every 1 to 2 seconds, weighted by ribbon
+width, limited to the selected kind when one is chosen. `window.Cerebrum.sankeyPulse.fire(kindName?)` fires one on demand,
+so an archetype run can light the ribbons it actually touched. Disabled under `prefers-reduced-motion`.

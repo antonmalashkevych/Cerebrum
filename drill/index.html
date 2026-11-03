@@ -88,7 +88,10 @@ body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--body);overf
 #sankey .col{font-family:var(--display);font-size:10px;letter-spacing:.14em;fill:var(--fg-mute)}
 #sankey rect{cursor:pointer}
 #sankey path{transition:opacity .2s}
-#sankey.hl path{opacity:.08} #sankey.hl path.on{opacity:.75}
+#sankey.hl path.rib{opacity:.08} #sankey.hl path.rib.on{opacity:.75}
+#sankey .imp{offset-rotate:0deg;animation:simp var(--d,3s) linear forwards;opacity:0}
+@keyframes simp{0%{offset-distance:0%;opacity:0}12%{opacity:1}88%{opacity:1}100%{offset-distance:100%;opacity:0}}
+@media (prefers-reduced-motion:reduce){ #sankey .imp{display:none} }
 #right{display:grid;grid-template-rows:auto 1fr auto;min-height:0}
 #kinds{display:flex;gap:6px;flex-wrap:wrap;padding:10px 12px;border-bottom:1px solid var(--line)}
 #kinds button{background:none;border:1px solid var(--line);border-radius:999px;color:var(--fg-dim);font-family:var(--mono);font-size:11px;padding:4px 9px;cursor:pointer}
@@ -698,7 +701,7 @@ function openLayer(ci){ if(!DATA) DATA=sampleData(); const c=clusters[ci]; layer
   document.documentElement.style.setProperty('--lobe-rgb',c.rgb.join(',')); const el=L('layer'); el.classList.add('on'); el.setAttribute('aria-hidden','false'); requestAnimationFrame(()=>el.classList.add('show'));
   document.getElementById('hud-lvl').textContent='L3 · DATA INSIDE '+c.name.toUpperCase(); selKind=null; selNode=null; L('lfind').value='';
   Loader.show('Reading '+c.name,`${c.count.toLocaleString()} nodes · ${c.children.length} kinds`); setTimeout(()=>{ if(layerOpen){ renderLayer(c.lobe); Loader.hide(); } },1100); }
-function closeLayer(){ Loader.hide(); const el=L('layer'); el.classList.remove('show'); setTimeout(()=>{ el.classList.remove('on'); el.setAttribute('aria-hidden','true'); },560); layerOpen=false; ambientLevel=1; if(focus!==null){ camT.zoom=focusZoom; document.getElementById('hud-lvl').textContent='L2 · KINDS INSIDE '+clusters[focus].name.toUpperCase(); } }
+function closeLayer(){ Loader.hide(); sankeyPulse.stop(); const el=L('layer'); el.classList.remove('show'); setTimeout(()=>{ el.classList.remove('on'); el.setAttribute('aria-hidden','true'); },560); layerOpen=false; ambientLevel=1; if(focus!==null){ camT.zoom=focusZoom; document.getElementById('hud-lvl').textContent='L2 · KINDS INSIDE '+clusters[focus].name.toUpperCase(); } }
 L('l-close').onclick=closeLayer; L('l-edit').onclick=()=>caption('Edit','add, connect or prune nodes here · edits go to Proposals for review',2600);
 L('lfind').addEventListener('input',()=>renderTable());
 function renderLayer(li){ const lobe=LOBES[li]; const fams=families.map((f,i)=>({f,i})).filter(x=>x.f.lobe===li); const ks=kinds.filter(k=>k.lobe===li); const nodes=DATA.nodes.filter(n=>n.plane===lobe.name);
@@ -715,18 +718,31 @@ function renderSankey(li,fams,ks,nodes){ const svg=L('sankey'); const Wd=svg.cli
   const pad=8, top=28, left=10, cw=12, usable=Ht-top-16; const colX=[left, Wd/2-cw/2, Wd-left-cw]; const pos=new Map();
   colsDef.forEach((col,ci)=>{ const sum=col.reduce((a,n)=>a+n.v,0)||1; const avail=usable-pad*(col.length-1); let y=top; col.forEach(n=>{ const h=Math.max(2,n.v/sum*avail); pos.set(n.id,{x:colX[ci],y,h,ci,label:n.label,v:n.v,outY:y,inY:y}); y+=h+pad; }); });
   const g=s=>document.createElementNS('http://www.w3.org/2000/svg',s);
-  const links=[]; ks.forEach(k=>{ links.push({a:'f:'+families[k.fam].name,b:'k:'+k.name,v:k.count,k:k.name}); prods.forEach(p=>{ const c=prodCount.get(k.name+'|'+p.key); if(c) links.push({a:'k:'+k.name,b:'p:'+p.key,v:c/(kindTotalLoaded.get(k.name)||1)*k.count,k:k.name}); }); });
+  ribbons=[]; const links=[]; ks.forEach(k=>{ links.push({a:'f:'+families[k.fam].name,b:'k:'+k.name,v:k.count,k:k.name}); prods.forEach(p=>{ const c=prodCount.get(k.name+'|'+p.key); if(c) links.push({a:'k:'+k.name,b:'p:'+p.key,v:c/(kindTotalLoaded.get(k.name)||1)*k.count,k:k.name}); }); });
   const sumOut=new Map(), sumIn=new Map(); links.forEach(l=>{ sumOut.set(l.a,(sumOut.get(l.a)||0)+l.v); sumIn.set(l.b,(sumIn.get(l.b)||0)+l.v); });
   links.forEach(l=>{ const A=pos.get(l.a),B=pos.get(l.b); if(!A||!B) return; const ha=A.h*l.v/(sumOut.get(l.a)||1), hb=B.h*l.v/(sumIn.get(l.b)||1); const y0=A.outY, y1=B.inY; A.outY+=ha; B.inY+=hb;
     const x0=A.x+cw, x1=B.x, mx=(x0+x1)/2; const d=`M${x0},${y0} C${mx},${y0} ${mx},${y1} ${x1},${y1} L${x1},${y1+hb} C${mx},${y1+hb} ${mx},${y0+ha} ${x0},${y0+ha} Z`;
-    const p=g('path'); p.setAttribute('d',d); p.setAttribute('fill',`rgba(${rgb},0.28)`); p.dataset.k=l.k; if(selKind&&l.k===selKind) p.classList.add('on'); svg.appendChild(p); });
+    const p=g('path'); p.setAttribute('d',d); p.setAttribute('class','rib'); p.setAttribute('fill',`rgba(${rgb},0.28)`); p.dataset.k=l.k; if(selKind&&l.k===selKind) p.classList.add('on'); svg.appendChild(p);
+    // centerline the impulse follows: a plain cubic between the two ribbon midpoints
+    ribbons.push({k:l.k,v:l.v,path:`M${x0},${y0+ha/2} C${mx},${y0+ha/2} ${mx},${y1+hb/2} ${x1},${y1+hb/2}`,len:Math.hypot(x1-x0,(y1+hb/2)-(y0+ha/2))}); });
   if(selKind) svg.classList.add('hl'); else svg.classList.remove('hl');
   pos.forEach((n,id)=>{ const r=g('rect'); r.setAttribute('x',n.x); r.setAttribute('y',n.y); r.setAttribute('width',cw); r.setAttribute('height',n.h); r.setAttribute('rx',2); r.setAttribute('fill',id.startsWith('p:')?'rgba(232,235,245,0.55)':`rgb(${rgb})`); r.setAttribute('opacity',selKind&&id==='k:'+selKind?1:0.85);
     r.addEventListener('mousemove',ev=>{ const t=L('ltip'); t.style.display='block'; t.style.left=(ev.clientX+12)+'px'; t.style.top=(ev.clientY+12)+'px'; t.textContent=`${n.label} · ${Math.round(n.v).toLocaleString()}`; }); r.addEventListener('mouseleave',()=>L('ltip').style.display='none');
     if(id.startsWith('k:')) r.addEventListener('click',()=>{ selKind=id.slice(2); selNode=null; renderLayer(li); }); svg.appendChild(r);
     const t=g('text'); const isK=n.ci===1; t.setAttribute('x',n.ci===2?n.x-6:n.x+cw+6); t.setAttribute('y',n.y+Math.min(n.h/2+4,n.h+10)); t.setAttribute('text-anchor',n.ci===2?'end':'start'); if(isK) t.setAttribute('class','k'); t.textContent=(n.h>=9||(isK&&id==='k:'+selKind))?(n.label.length>28?n.label.slice(0,27)+'…':n.label):''; svg.appendChild(t); });
   ['FAMILY','KIND','DATA PRODUCT'].forEach((lab,i)=>{ const t=g('text'); t.setAttribute('class','col'); t.setAttribute('x',colX[i]+(i===2?cw:0)); t.setAttribute('y',16); t.setAttribute('text-anchor',i===2?'end':'start'); t.textContent=lab; svg.appendChild(t); });
-  L('l-flow').textContent=`${links.length} ribbons · widths are node counts`; }
+  L('l-flow').textContent=`${links.length} ribbons · widths are node counts`; sankeyPulse.start(li); }
+// ---- Sankey impulses: one SVG circle per impulse riding a ribbon centerline with CSS Motion Path ----
+let ribbons=[];
+const sankeyPulse=(()=>{ let timer=null, lobe=0; const svg=()=>L('sankey');
+  function fire(k){ const pool=k?ribbons.filter(r=>r.k===k):ribbons; if(!pool.length) return; const tot=pool.reduce((a,r)=>a+r.v,0); let x=Math.random()*tot, r=pool[0]; for(const c of pool){ x-=c.v; if(x<=0){ r=c; break; } }
+    const c=document.createElementNS('http://www.w3.org/2000/svg','circle'); c.setAttribute('r',3.2); c.setAttribute('class','imp'); c.setAttribute('fill',`rgb(${LOBES[lobe].rgb.join(',')})`); c.style.offsetPath=`path("${r.path}")`; c.style.setProperty('--d',(1.6+r.len/180)+'s'); c.style.filter='drop-shadow(0 0 4px rgba(255,255,255,.9))';
+    c.addEventListener('animationend',()=>c.remove()); svg().appendChild(c); }
+  function tick(){ if(!layerOpen){ stop(); return; } fire(selKind); timer=setTimeout(tick,900+Math.random()*1400); }
+  function start(li){ lobe=li; stop(); timer=setTimeout(tick,400); }
+  function stop(){ clearTimeout(timer); timer=null; }
+  return {start,stop,fire}; })();
+window.Cerebrum.sankeyPulse=sankeyPulse;
 function renderTable(){ const lobe=LOBES[layerLobe]; const q=L('lfind').value.trim().toLowerCase(); let rows=DATA.nodes.filter(n=>n.plane===lobe.name&&(!selKind||n.kind===selKind)); if(q) rows=rows.filter(n=>(n.name+' '+n.kind+' '+n.product).toLowerCase().includes(q)); const shown=rows.slice(0,400);
   const pname=k=>(PRODUCTS.find(p=>p.key===k)||{}).name||k;
   L('tbl').innerHTML=`<table><thead><tr><th>Node</th><th>Kind</th><th>Data product</th><th>Scope</th><th>Status</th><th>Updated</th></tr></thead><tbody>${shown.map(n=>`<tr data-id="${n.id}" class="${selNode===n.id?'on':''}"><td>${n.name}</td><td class="m">${n.kind}</td><td class="m">${pname(n.product)}</td><td><span class="pill">${n.scope}</span></td><td><span class="pill ${n.status==='governed'?'g':'d'}">${n.status}</span></td><td class="m">${n.updated}</td></tr>`).join('')}</tbody></table>${rows.length>shown.length?`<div style="padding:8px 12px;font-family:var(--mono);font-size:11px;color:var(--fg-mute)">${rows.length.toLocaleString()} rows · showing 400 · narrow with the filter</div>`:''}`;
