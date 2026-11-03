@@ -108,6 +108,17 @@ body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--body);overf
 #lfind{background:rgba(7,8,15,.6);border:1px solid var(--line);border-radius:6px;color:var(--fg);font-family:var(--body);font-size:12px;padding:5px 9px;width:200px;margin-left:auto}
 #ltip{position:fixed;z-index:9;pointer-events:none;display:none;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 9px;font-family:var(--mono);font-size:11px;color:var(--fg)}
 @media (max-width:900px){ #lg{grid-template-columns:1fr;grid-template-rows:minmax(220px,1fr) minmax(0,1fr)} }
+/* loader: a close-up neuron while the catalog is loading or slow */
+#loader{position:fixed;inset:0;z-index:12;display:none;background:#07080f;opacity:0;transition:opacity .4s}
+#loader.on{display:block} #loader.show{opacity:1}
+#loader canvas{position:absolute;inset:0;width:100%;height:100%}
+#loader .txt{position:absolute;left:0;right:0;bottom:calc(10% + env(safe-area-inset-bottom,0px));text-align:center;pointer-events:none}
+#loader .t{font-family:var(--display);font-size:15px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--fg)}
+#loader .s{font-family:var(--mono);font-size:11px;color:var(--fg-dim);margin-top:6px}
+#loader .bar{width:160px;height:2px;margin:14px auto 0;background:rgba(140,150,190,.15);overflow:hidden;border-radius:2px}
+#loader .bar i{display:block;height:100%;width:40%;background:rgb(var(--lobe-rgb,255,138,61));animation:ld 1.6s ease-in-out infinite}
+@keyframes ld{0%{transform:translateX(-100%)}100%{transform:translateX(400%)}}
+@media (prefers-reduced-motion:reduce){ #loader .bar i{animation:none;width:100%} }
 #tip{position:fixed;z-index:6;pointer-events:none;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-family:var(--mono);font-size:11px;color:var(--fg-dim);display:none;backdrop-filter:blur(8px)}
 #tip b{color:var(--fg);font-family:var(--display);font-size:13px;letter-spacing:.06em;text-transform:uppercase;display:block;margin-bottom:2px}
 #hint{top:calc(70px + env(safe-area-inset-top,0px));right:max(16px,env(safe-area-inset-right,0px));font-family:var(--mono);font-size:10px;color:var(--fg-mute);letter-spacing:.06em;text-align:right}
@@ -171,6 +182,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--body);overf
   </div>
 </div></div>
 <div id="ltip"></div>
+<div id="loader" aria-live="polite"><canvas id="lcv"></canvas><div class="txt"><div class="t" id="ld-t">Waking Cerebrum</div><div class="s" id="ld-s">loading catalog</div><div class="bar"><i></i></div></div></div>
 
 <script>
 (function(){
@@ -242,7 +254,12 @@ function scatter(kindIdx,cx,cy,cz,r){
     TX[id]=cx+Math.sin(b)*Math.cos(a)*rr; TY[id]=cy+Math.sin(b)*Math.sin(a)*rr*0.85; TZ[id]=cz+Math.cos(b)*rr*0.8; }
 }
 let clusters=[], bundles=[];
+const layoutCache={};
 function layout(mode){
+  if(layoutCache[mode]){ const c=layoutCache[mode]; TX.set(c.tx,0); TY.set(c.ty,0); TZ.set(c.tz,0); clusters=c.clusters; bundles=c.bundles; subBundles=c.subBundles; fibers=c.fibers; kinds.forEach((k,i)=>{ k.cx=c.kc[i][0]; k.cy=c.kc[i][1]; k.cz=c.kc[i][2]; k.r=c.kc[i][3]; }); return; }
+  layoutCompute(mode); layoutCache[mode]={tx:TX.slice(0,COUNT),ty:TY.slice(0,COUNT),tz:TZ.slice(0,COUNT),clusters,bundles,subBundles,fibers,kc:kinds.map(k=>[k.cx,k.cy,k.cz,k.r])};
+}
+function layoutCompute(mode){
   seed=777; clusters=[];
   if(mode==='lobe'){
     LOBES.forEach((L,li)=>{ const cnt=lobeRange[li][1]-lobeRange[li][0]+1; const R=radiusFor(cnt);
@@ -275,6 +292,7 @@ function layout(mode){
   for(let i=0;i<Math.min(700,cross.length);i++){ const e=cross[Math.floor(rnd()*cross.length)]; const a=EA[e],b=EB[e]; fibers.push({a,b,ox:(rnd()-0.5)*0.5,oy:(rnd()-0.5)*0.5,oz:(rnd()-0.5)*0.6,lobe:LOBE[a]}); }
 }
 let subBundles=[], fibers=[];
+const IMPULSE_SPEED=0.45; // CTO feedback: impulses travel at under half the original pace
 function subGeom(b){ const A=kinds[b.a],B=kinds[b.b]; const mx=(A.cx+B.cx)/2,my=(A.cy+B.cy)/2,mz=(A.cz+B.cz)/2; const dx=B.cx-A.cx,dy=B.cy-A.cy,d=Math.hypot(dx,dy)||1; const nx=-dy/d,ny=dx/d; return [A.cx,A.cy,A.cz, mx+nx*d*b.bow*b.s,my+ny*d*b.bow*b.s,mz+d*b.lift*b.s, B.cx,B.cy,B.cz]; }
 function fiberGeom(f){ const a=f.a,b=f.b; const dx=X[b]-X[a],dy=Y[b]-Y[a],dz=Z[b]-Z[a],d=Math.hypot(dx,dy,dz)||1; return [X[a],Y[a],Z[a], (X[a]+X[b])/2+(-dy*f.ox+dz*f.oz)*0.6, (Y[a]+Y[b])/2+(dx*f.oy-dz*f.ox)*0.6, (Z[a]+Z[b])/2+d*f.oz*0.5, X[b],Y[b],Z[b]]; }
 let mode='lobe'; layout(mode);
@@ -362,14 +380,14 @@ const MESHE=[]; for(let i=0;i<MESH.length;i++) for(let j=i+1;j<MESH.length;j++){
 const flashes=[], signals=[], marks=[];
 let sigCount=0, lastRateT=0;
 function flash(i,amp=1,dur=900){ flashes.push({i,t0:now,dur,amp}); }
-function flashCluster(c,n,amp=1,spread=0){ for(let k=0;k<n;k++){ const i=c.range[0]+Math.floor(rnd()*(c.range[1]-c.range[0]+1)); if(spread) setTimeout(()=>flash(i,amp),rnd()*spread); else flash(i,amp); } }
+function flashCluster(c,n,amp=1,spread=0){ if(!c||!c.range) return; for(let k=0;k<n;k++){ const i=c.range[0]+Math.floor(rnd()*(c.range[1]-c.range[0]+1)); if(spread) setTimeout(()=>flash(i,amp),rnd()*spread); else flash(i,amp); } }
 function bez3(g,t){ const u=1-t; return [u*u*g[0]+2*u*t*g[3]+t*t*g[6], u*u*g[1]+2*u*t*g[4]+t*t*g[7], u*u*g[2]+2*u*t*g[5]+t*t*g[8]]; }
 function bundleGeom(b){ const A=clusters[b.a],B=clusters[b.b]; const mx=(A.cx+B.cx)/2,my=(A.cy+B.cy)/2,mz=(A.cz+B.cz)/2; const dx=B.cx-A.cx,dy=B.cy-A.cy,d=Math.hypot(dx,dy)||1; const nx=-dy/d,ny=dx/d; const s=(b.a+b.b)%2?1:-1; return [A.cx,A.cy,A.cz, mx+nx*d*0.16*s,my+ny*d*0.16*s,mz+d*0.12, B.cx,B.cy,B.cz]; }
-function sendBundle(a,b,opts={}){ let bd=bundles.find(x=>(x.a===a&&x.b===b)||(x.a===b&&x.b===a)); const rev=bd?bd.a!==a:false;
+function sendBundle(a,b,opts={}){ if(!clusters[a]||!clusters[b]) return; let bd=bundles.find(x=>(x.a===a&&x.b===b)||(x.a===b&&x.b===a)); const rev=bd?bd.a!==a:false;
   const g=bd?bundleGeom(bd):[clusters[a].cx,clusters[a].cy,clusters[a].cz,(clusters[a].cx+clusters[b].cx)/2,(clusters[a].cy+clusters[b].cy)/2,(clusters[a].cz+clusters[b].cz)/2,clusters[b].cx,clusters[b].cy,clusters[b].cz];
-  signals.push({kind:'bundle',g,rev,t:0,speed:opts.speed||0.0011,rgb:opts.rgb||clusters[a].rgb,size:opts.size||1,onEnd:opts.onEnd,target:b,burst:opts.burst??6}); sigCount++; }
+  signals.push({kind:'bundle',g,rev,t:0,keep:opts.keep,speed:opts.speed||0.0011,rgb:opts.rgb||clusters[a].rgb,size:opts.size||1,onEnd:opts.onEnd,target:b,burst:opts.burst??6}); sigCount++; }
 function sendEdge(e,rev){ signals.push({kind:'edge',e,rev,t:0,speed:0.004+rnd()*0.004,rgb:LOBES[LOBE[EA[e]]].rgb,size:0.6}); sigCount++; }
-function sendPath(from,to,opts={}){ signals.push({kind:'bundle',g:[from[0],from[1],from[2],(from[0]+to[0])/2,(from[1]+to[1])/2-140,(from[2]+to[2])/2,to[0],to[1],to[2]],rev:false,t:0,speed:opts.speed||0.0012,rgb:opts.rgb||[255,255,255],size:opts.size||1.4,onEnd:opts.onEnd,burst:0}); sigCount++; }
+function sendPath(from,to,opts={}){ signals.push({kind:'bundle',g:[from[0],from[1],from[2],(from[0]+to[0])/2,(from[1]+to[1])/2-140,(from[2]+to[2])/2,to[0],to[1],to[2]],rev:false,t:0,keep:opts.keep,speed:opts.speed||0.0012,rgb:opts.rgb||[255,255,255],size:opts.size||1.4,onEnd:opts.onEnd,burst:0}); sigCount++; }
 function clusterOfLobe(li){ return clusters.find(c=>c.lobe===li && mode==='lobe') || clusters.filter(c=>c.lobe===li).sort((a,b)=>b.count-a.count)[0]; }
 
 // ambient: continuous impulses on every bundle, streams inside lobes, and pulsing regions
@@ -408,10 +426,10 @@ function sceneThought(){
   const A=clusterOfLobe(2),G=clusterOfLobe(1),R=clusterOfLobe(0),E=clusterOfLobe(3); const ci=c=>clusters.indexOf(c);
   caption('Question arrives','"Why is AR over 90 days up at Facility 3 this quarter?"',Infinity);
   sendPath([-1200,420,-300],[A.cx,A.cy,A.cz],{onEnd:()=>{ flashCluster(A,45,1.3,250); caption('Archetype fires','Diagnose candidate cause · chosen from 18 archetypes · 2 playbooks loaded',Infinity); }});
-  at(1900,()=>sendBundle(ci(A),ci(G),{size:1.3,onEnd:()=>{ flashCluster(G,14,1.4,200); caption('Governance gates it','3 metric standards · 1 data policy · row-level output refused',Infinity); }}));
-  at(3400,()=>sendBundle(ci(G),ci(R),{size:1.3,onEnd:()=>{ flashCluster(R,70,1.2,500); caption('Terms resolved','AR over 90 days → 14 data elements · 2 vocabulary terms · 1 taxonomy',Infinity); }}));
-  at(5000,()=>sendBundle(ci(R),ci(E),{size:1.5,onEnd:()=>{ flashCluster(E,320,1.3,1300); for(let i=0;i<60;i++) at(rnd()*1200,()=>{ const e=Math.floor(rnd()*INTRA); if(LOBE[EA[e]]===3) sendEdge(e,false); }); caption('Metrics computed','6 governed metrics · 1 data product (Accounts) · 412 ms',Infinity); }}));
-  at(7400,()=>sendBundle(ci(E),ci(A),{size:1.5,onEnd:()=>{ flashCluster(A,30,1.2,300); caption('Answer composed','contributors ranked · definitions cited · caveats attached',Infinity); }}));
+  at(1900,()=>sendBundle(ci(A),ci(G),{keep:true,size:1.3,onEnd:()=>{ flashCluster(G,14,1.4,200); caption('Governance gates it','3 metric standards · 1 data policy · row-level output refused',Infinity); }}));
+  at(3400,()=>sendBundle(ci(G),ci(R),{keep:true,size:1.3,onEnd:()=>{ flashCluster(R,70,1.2,500); caption('Terms resolved','AR over 90 days → 14 data elements · 2 vocabulary terms · 1 taxonomy',Infinity); }}));
+  at(5000,()=>sendBundle(ci(R),ci(E),{keep:true,size:1.5,onEnd:()=>{ flashCluster(E,320,1.3,1300); for(let i=0;i<60;i++) at(rnd()*1200,()=>{ const e=Math.floor(rnd()*INTRA); if(LOBE[EA[e]]===3) sendEdge(e,false); }); caption('Metrics computed','6 governed metrics · 1 data product (Accounts) · 412 ms',Infinity); }}));
+  at(7400,()=>sendBundle(ci(E),ci(A),{keep:true,size:1.5,onEnd:()=>{ flashCluster(A,30,1.2,300); caption('Answer composed','contributors ranked · definitions cited · caveats attached',Infinity); }}));
   at(9000,()=>{ emanate(1.3); sendPath([A.cx,A.cy,A.cz],[1250,460,-200],{onEnd:()=>caption('Answer returned','4 lobes · 1 thought · 2.1 s',3000)}); });
   at(12500,()=>{ ambientLevel=1; document.querySelectorAll('#rail button').forEach(b=>b.classList.toggle('on',b.dataset.scene==='resting')); scene='resting'; document.getElementById('hud-focus').textContent='resting state · sample catalog'; });
 }
@@ -435,7 +453,7 @@ function sceneGate(){
   ambientLevel=0.2; gateMode=true;
   const G=clusterOfLobe(1),E=clusterOfLobe(3),A=clusterOfLobe(2); const ci=c=>clusters.indexOf(c);
   caption('The gate','52 governance neurons hold 5,200 executable ones to standard',Infinity);
-  const burst=()=>{ if(!gateMode) return; const ok=rnd()<0.78; sendBundle(ci(E),ci(G),{size:1.1,speed:0.0016,burst:3,rgb:[255,140,70],onEnd:()=>{ flashCluster(G,ok?4:9,ok?0.9:1.8,120); if(ok) sendBundle(ci(G),ci(A),{size:0.9,speed:0.0018,burst:3,rgb:[255,196,90]}); else { sendBundle(ci(G),ci(E),{size:1.2,speed:0.0012,burst:8,rgb:[255,80,80]}); caption('Request refused','unregistered grain · rerouted for a definition',Infinity); } }}); sceneTimers.push(setTimeout(burst,180+rnd()*260)); };
+  const burst=()=>{ if(!gateMode) return; const ok=rnd()<0.78; sendBundle(ci(E),ci(G),{keep:true,size:1.1,speed:0.0016,burst:3,rgb:[255,140,70],onEnd:()=>{ flashCluster(G,ok?4:9,ok?0.9:1.8,120); if(ok) sendBundle(ci(G),ci(A),{keep:true,size:0.9,speed:0.0018,burst:3,rgb:[255,196,90]}); else { sendBundle(ci(G),ci(E),{keep:true,size:1.2,speed:0.0012,burst:8,rgb:[255,80,80]}); caption('Request refused','unregistered grain · rerouted for a definition',Infinity); } }}); sceneTimers.push(setTimeout(burst,180+rnd()*260)); };
   burst(); burst();
   at(2000,()=>caption('Standards applied','every executable request crosses the gate · 3 standards per request',Infinity));
   at(10500,()=>{ gateMode=false; ambientLevel=1; caption('Gate closed','52 rules · 1,900 requests per minute at peak',3000); });
@@ -464,7 +482,7 @@ function sceneGenesis(){
 let focus=null;
 function resetCam(){ camT.x=0; camT.y=-60; camT.z=0; camT.zoom=fitZoom(); }
 function lvlText(){ return mode==='lobe'?'L1 · LOBES':mode==='region'?'L1 · REGIONS':'L1 · KINDS'; }
-function setMode(m){ mode=m; focus=null; layout(m); placeGrown(); document.querySelectorAll('#top .seg [data-mode]').forEach(b=>b.classList.toggle('on',b.dataset.mode===m)); resetCam(); updateCrumb(); document.getElementById('hud-lvl').textContent=lvlText(); }
+function setMode(m){ mode=m; focus=null; signals.length=0; layout(m); placeGrown(); document.querySelectorAll('#top .seg [data-mode]').forEach(b=>b.classList.toggle('on',b.dataset.mode===m)); resetCam(); updateCrumb(); document.getElementById('hud-lvl').textContent=lvlText(); }
 let focusZoom=1;
 function setFocus(ci){ focus=ci; const c=clusters[ci]; camT.x=c.cx; camT.y=c.cy; camT.z=c.cz; camT.zoom=Math.min(H*0.6/(c.r*2.2), W*0.6/(c.r*2.6)); focusZoom=camT.zoom; if(mode==='lobe') caption(c.name,'scroll in, press Enter or double-click to open the data inside',2800); updateCrumb(); document.getElementById('hud-lvl').textContent=(mode==='lobe'?'L2 · KINDS INSIDE ':'L2 · ')+c.name.toUpperCase(); }
 function clearFocus(){ focus=null; resetCam(); updateCrumb(); document.getElementById('hud-lvl').textContent=lvlText(); }
@@ -571,7 +589,7 @@ function frameInner(t){
   if(lapse){ const wk=Math.min(52,(now-lapse.t0)/16000*52); const ms=Date.now()+wk*604800000; growTo(ms,true); refreshCounts(); document.getElementById('hud-grow').textContent='time-lapse · week '+Math.floor(wk)+' · '+growthText(ms).replace(/^age [^·]*· /,''); }
   ambientTick(dt);
   for(let s=signals.length-1;s>=0;s--){ const g=signals[s]; if(g.t===0 && scoreOn){ const li=g.kind==='edge'?LOBE[EA[g.e]]:g.kind==='fiber'?g.f.lobe:LOBES.findIndex(L=>L.rgb===g.rgb); grain(li<0?Math.floor(Math.random()*4):li, g.kind==='bundle'?1:g.kind==='sub'?0.7:0.45, g.speed, W/2); }
-    g.t+=g.speed*dt; if(g.t>=1){ if(scoreOn && g.kind!=='edge'){ let px=W/2; if(g.kind==='bundle'||g.kind==='sub'){ const q=bez3(g.g,g.rev?0:1); proj(q[0],q[1],q[2],P); px=P[0]; } grain(g.kind==='fiber'?g.f.lobe:LOBES.findIndex(L=>L.rgb===g.rgb), g.kind==='bundle'?1.3:0.6, g.speed*1.6, px); } if(g.kind==='bundle'&&g.burst&&g.target!==undefined) flashCluster(clusters[g.target],g.burst,0.9,150); if(g.kind==='sub'&&g.target) flash(g.target.start+Math.floor(rnd()*g.target.count),0.8,600); if(g.kind==='fiber') flash(g.rev?g.f.a:g.f.b,0.7,500); if(g.kind==='grow') flash(g.b,1.4,900); if(g.onEnd) g.onEnd(); signals.splice(s,1);} }
+    g.t+=g.speed*dt*(g.keep?1:IMPULSE_SPEED); if(g.t>=1){ if(scoreOn && g.kind!=='edge'){ let px=W/2; if(g.kind==='bundle'||g.kind==='sub'){ const q=bez3(g.g,g.rev?0:1); proj(q[0],q[1],q[2],P); px=P[0]; } grain(g.kind==='fiber'?g.f.lobe:LOBES.findIndex(L=>L.rgb===g.rgb), g.kind==='bundle'?1.3:0.6, g.speed*1.6, px); } if(g.kind==='bundle'&&g.burst&&g.target!==undefined) flashCluster(clusters[g.target],g.burst,0.9,150); if(g.kind==='sub'&&g.target) flash(g.target.start+Math.floor(rnd()*g.target.count),0.8,600); if(g.kind==='fiber') flash(g.rev?g.f.a:g.f.b,0.7,500); if(g.kind==='grow') flash(g.b,1.4,900); if(g.onEnd) g.onEnd(); signals.splice(s,1);} }
   for(let f=flashes.length-1;f>=0;f--) if(now-flashes[f].t0>flashes[f].dur) flashes.splice(f,1);
   if(now-lastRateT>1000){ document.getElementById('hud-sig').textContent=sigCount; sigCount=0; lastRateT=now; document.getElementById('hud-fire').textContent=flashes.length;
     if(!lapse){ const before=grownN+grownS; growTo(Date.now(),true); if(grownN+grownS!==before){ refreshCounts(); caption('The brain grew',growthText(Date.now()),3000); } document.getElementById('hud-grow').textContent=growthText(Date.now()); } }
@@ -677,8 +695,9 @@ let layerOpen=false, layerT0=0, layerLobe=-1, selKind=null, selNode=null;
 const L=id=>document.getElementById(id);
 function openLayer(ci){ if(!DATA) DATA=sampleData(); const c=clusters[ci]; layerOpen=true; layerT0=now; layerLobe=c.lobe; ambientLevel=0.15; camT.zoom=focusZoom*2.2;
   document.documentElement.style.setProperty('--lobe-rgb',c.rgb.join(',')); const el=L('layer'); el.classList.add('on'); el.setAttribute('aria-hidden','false'); requestAnimationFrame(()=>el.classList.add('show'));
-  document.getElementById('hud-lvl').textContent='L3 · DATA INSIDE '+c.name.toUpperCase(); selKind=null; selNode=null; L('lfind').value=''; renderLayer(c.lobe); }
-function closeLayer(){ const el=L('layer'); el.classList.remove('show'); setTimeout(()=>{ el.classList.remove('on'); el.setAttribute('aria-hidden','true'); },560); layerOpen=false; ambientLevel=1; if(focus!==null){ camT.zoom=focusZoom; document.getElementById('hud-lvl').textContent='L2 · KINDS INSIDE '+clusters[focus].name.toUpperCase(); } }
+  document.getElementById('hud-lvl').textContent='L3 · DATA INSIDE '+c.name.toUpperCase(); selKind=null; selNode=null; L('lfind').value='';
+  Loader.show('Reading '+c.name,`${c.count.toLocaleString()} nodes · ${c.children.length} kinds`); setTimeout(()=>{ if(layerOpen){ renderLayer(c.lobe); Loader.hide(); } },1100); }
+function closeLayer(){ Loader.hide(); const el=L('layer'); el.classList.remove('show'); setTimeout(()=>{ el.classList.remove('on'); el.setAttribute('aria-hidden','true'); },560); layerOpen=false; ambientLevel=1; if(focus!==null){ camT.zoom=focusZoom; document.getElementById('hud-lvl').textContent='L2 · KINDS INSIDE '+clusters[focus].name.toUpperCase(); } }
 L('l-close').onclick=closeLayer; L('l-edit').onclick=()=>caption('Edit','add, connect or prune nodes here · edits go to Proposals for review',2600);
 L('lfind').addEventListener('input',()=>renderTable());
 function renderLayer(li){ const lobe=LOBES[li]; const fams=families.map((f,i)=>({f,i})).filter(x=>x.f.lobe===li); const ks=kinds.filter(k=>k.lobe===li); const nodes=DATA.nodes.filter(n=>n.plane===lobe.name);
@@ -716,6 +735,70 @@ function renderNeighbours(){ const n=DATA.nodes.find(x=>x.id===selNode); if(!n){
   const items=adj.map(e=>{ const other=e.a===n.kind?e.b:e.a; const cand=DATA.nodes.filter(x=>x.kind===other); const m=cand.length?pick(cand):null; return m?`<span class="n">${m.name}<i>${other} · ${e.n}</i></span>`:''; }).join('');
   L('nb').innerHTML=`<div class="t">Neighbours of ${n.name}</div>${items||'<span style="color:var(--fg-mute)">no aggregated edges for this kind</span>'}`; }
 addEventListener('resize',()=>{ if(layerOpen) renderLayer(layerLobe); });
+
+
+// ================= LOADER: neuron close-up =================
+// One neuron grows its dendrites and axon while impulses run tip → soma → axon; the view pulls back, other neurons
+// appear, an axon reaches a dendrite and a synapse forms; impulses cross it. Loops with a new seed each cycle.
+const Loader=(()=>{
+  const el=L('loader'), cv2=L('lcv'), c2=cv2.getContext('2d'); let on=false, raf=0, t0=0, rs=1, cycle=0; let W2=0,H2=0,D2=1;
+  let neurons=[], links=[], imps=[], sparks=[];
+  const rnd2=()=>{ rs|=0; rs=rs+0x6D2B79F5|0; let t=Math.imul(rs^rs>>>15,1|rs); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; };
+  function makeNeuron(x,y,rot,rgb,gStart,fast,axLen){ const n={x,y,rgb,segs:[],tips:[],axon:[],soma:9+rnd2()*3,flash:0,alpha:0,gStart};
+    const dur=fast?350:900;
+    const grow=(x0,y0,ang,len,depth,parent,start)=>{ const x1=x0+Math.cos(ang)*len, y1=y0+Math.sin(ang)*len; const seg={x0,y0,x1,y1,len,depth,parent,start,dur,kind:'d',ch:0}; n.segs.push(seg); if(parent) parent.ch++;
+      const kids=depth<3?(1+(rnd2()<0.75?1:0)+(depth===0&&rnd2()<0.4?1:0)):0; if(!kids){ n.tips.push(seg); return; }
+      for(let k=0;k<kids;k++){ const a=ang+(rnd2()-0.5)*1.5+(k-(kids-1)/2)*0.5; grow(x1,y1,a,len*(0.66+rnd2()*0.14),depth+1,seg,start+dur*0.85); } };
+    const trunks=5+Math.floor(rnd2()*3); for(let i=0;i<trunks;i++){ const a=rot+Math.PI*0.35+(i/(trunks-1))*Math.PI*1.3+(rnd2()-0.5)*0.3; grow(x,y,a,58+rnd2()*40,0,null,gStart+i*120); }
+    // axon: a long chain opposite the dendrites with a small terminal tuft
+    let ax=x,ay=y,aa=rot-Math.PI*0.0+(rnd2()-0.5)*0.3,prev=null; const axStart=gStart+dur*1.6; const segLen=(axLen||260)/5; for(let i=0;i<5;i++){ const len=segLen*(0.85+rnd2()*0.3); const x1=ax+Math.cos(aa)*len,y1=ay+Math.sin(aa)*len; const seg={x0:ax,y0:ay,x1,y1,len,depth:0,parent:prev,start:axStart+i*dur*0.5,dur:dur*0.6,kind:'a'}; n.segs.push(seg); n.axon.push(seg); prev=seg; ax=x1; ay=y1; aa+=(rnd2()-0.5)*0.5; }
+    n.axonEnd=prev; return n; }
+  const g=(seg,t)=>Math.max(0,Math.min(1,(t-seg.start)/seg.dur));
+  const chain=seg=>{ const c=[]; while(seg){ c.unshift(seg); seg=seg.parent; } return c; };
+  const chainLen=c=>c.reduce((a,s)=>a+s.len,0);
+  const pointOn=(c,d)=>{ for(const s of c){ if(d<=s.len){ const u=d/s.len; return [s.x0+(s.x1-s.x0)*u,s.y0+(s.y1-s.y0)*u]; } d-=s.len; } const s=c[c.length-1]; return [s.x1,s.y1]; };
+  function build(){ rs=1000+cycle*7919; neurons=[]; links=[]; imps=[]; sparks=[];
+    const cols=[LOBES[0].rgb,LOBES[3].rgb,LOBES[2].rgb,LOBES[1].rgb]; const main=cols[cycle%4];
+    // axons point at their planned target; dendrites face away from it. main → n1, n2 → main, n3 → n1
+    const o=[[430,-150],[-400,190],[380,260]]; const ang=(a,b)=>Math.atan2(b[1]-a[1],b[0]-a[0]); const dist=(a,b)=>Math.hypot(b[0]-a[0],b[1]-a[1]);
+    neurons.push(makeNeuron(0,0,ang([0,0],o[0])+(rnd2()-0.5)*0.2,main,200,false,dist([0,0],o[0])*0.55));
+    const rots=[ang(o[0],[0,0])+Math.PI, ang(o[1],[0,0]), ang(o[2],o[0])]; const lens=[220, dist(o[1],[0,0])*0.55, dist(o[2],o[0])*0.55];
+    o.forEach((pt,i)=>{ const n=makeNeuron(pt[0],pt[1],rots[i]+(rnd2()-0.5)*0.2,cols[(cycle+1+i)%4],4600+i*300,true,lens[i]); n.hidden=true; neurons.push(n); });
+    // planned connections: main axon → neuron1 tip at 8000; neuron2 axon → main tip at 9600; neuron3 axon → neuron1 tip at 10800
+    const plan=[[0,1,8000],[2,0,9600],[3,1,10800]]; plan.forEach(([a,b,at])=>{ const A=neurons[a],B=neurons[b]; const end=A.axonEnd; const tip=B.tips.slice().sort((p,q)=>Math.hypot(p.x1-end.x1,p.y1-end.y1)-Math.hypot(q.x1-end.x1,q.y1-end.y1))[0]; links.push({A,B,tip,at,seg:{x0:end.x1,y0:end.y1,x1:tip.x1,y1:tip.y1,len:Math.hypot(tip.x1-end.x1,tip.y1-end.y1),start:at,dur:1100},formed:false}); }); }
+  function spawn(n,T){ const ready=n.tips.filter(s=>g(s,T)>=1); if(!ready.length) return; const tip=ready[Math.floor(rnd2()*ready.length)]; const c=chain(tip); imps.push({n,c,d:chainLen(c),dir:-1,speed:0.11+rnd2()*0.06,stage:'d'}); }
+  function step(T,dt){ // impulses
+    neurons.forEach((n,i)=>{ if(n.hidden&&T<4600) return; if(rnd2()<dt*(i===0?0.0018:0.0007)) spawn(n,T); n.flash*=Math.pow(0.5,dt/160); });
+    for(let i=imps.length-1;i>=0;i--){ const m=imps[i]; m.d+=m.dir*m.speed*dt;
+      if(m.stage==='d'&&m.d<=0){ m.n.flash=1; imps.splice(i,1); const ax=m.n.axon; if(ax.length&&g(ax[0],T)>=1){ setTimeout(()=>imps.push({n:m.n,c:ax,d:0,dir:1,speed:0.16,stage:'a'}),120); } continue; }
+      if(m.stage==='a'){ const L2=chainLen(m.c); const grown=m.c.reduce((a,s)=>a+s.len*g(s,T),0); if(m.d>=Math.min(L2,grown)){ imps.splice(i,1); const lk=links.find(l=>l.A===m.n&&l.formed); if(lk){ imps.push({n:m.n,c:[lk.seg],d:0,dir:1,speed:0.14,stage:'s',lk}); } else sparks.push({x:m.c[m.c.length-1].x1,y:m.c[m.c.length-1].y1,t0:T,rgb:m.n.rgb,amp:0.5}); } continue; }
+      if(m.stage==='s'&&m.d>=m.lk.seg.len){ imps.splice(i,1); sparks.push({x:m.lk.tip.x1,y:m.lk.tip.y1,t0:T,rgb:[255,255,255],amp:1}); const c=chain(m.lk.tip); imps.push({n:m.lk.B,c,d:chainLen(c),dir:-1,speed:0.13,stage:'d'}); } }
+    links.forEach(l=>{ if(!l.formed&&g(l.seg,T)>=1){ l.formed=true; sparks.push({x:l.tip.x1,y:l.tip.y1,t0:T,rgb:[255,255,255],amp:1.6}); } }); }
+  function draw(T){ c2.setTransform(D2,0,0,D2,0,0); c2.clearRect(0,0,W2,H2); const vg=c2.createRadialGradient(W2/2,H2/2,0,W2/2,H2/2,Math.max(W2,H2)*0.7); vg.addColorStop(0,'#0c0e1c'); vg.addColorStop(1,'#05060b'); c2.fillStyle=vg; c2.fillRect(0,0,W2,H2);
+    const zoomT=Math.max(0,Math.min(1,(T-4200)/3000)); const e=zoomT<0.5?2*zoomT*zoomT:1-Math.pow(-2*zoomT+2,2)/2; const scale=(1.15-0.62*e)*Math.min(W2,H2)/520; const cx=W2/2+(-60+60*e)*scale, cy=H2/2+(20-10*e)*scale;
+    c2.save(); c2.translate(cx,cy); c2.scale(scale,scale); c2.lineCap='round'; c2.lineJoin='round';
+    const fadeAll=T>13800?Math.max(0,1-(T-13800)/900):1;
+    neurons.forEach(n=>{ n.alpha=n.hidden?Math.max(0,Math.min(1,(T-4600)/1200)):1; const A=n.alpha*fadeAll; if(A<=0) return; const col=n.rgb.join(',');
+      // glow pass then core pass
+      for(let pass=0;pass<2;pass++){ n.segs.forEach(sg=>{ const gg=g(sg,T); if(gg<=0) return; const x1=sg.x0+(sg.x1-sg.x0)*gg,y1=sg.y0+(sg.y1-sg.y0)*gg; const w=sg.kind==='a'?1.9:Math.max(0.45,2.0-sg.depth*0.5);
+        c2.strokeStyle=pass?`rgba(${col},${0.9*A})`:`rgba(${col},${0.16*A})`; c2.lineWidth=pass?w:w*4; c2.beginPath(); c2.moveTo(sg.x0,sg.y0); c2.lineTo(x1,y1); c2.stroke();
+        if(pass&&gg<1&&gg>0){ c2.fillStyle=`rgba(255,255,255,${0.8*A})`; c2.beginPath(); c2.arc(x1,y1,1.6,0,6.283); c2.fill(); } }); }
+      // soma
+      const r=n.soma*(1+0.35*n.flash); const sg=c2.createRadialGradient(n.x,n.y,0,n.x,n.y,r*2.6); sg.addColorStop(0,`rgba(255,255,255,${(0.9+0.1*n.flash)*A})`); sg.addColorStop(0.3,`rgba(${col},${0.95*A})`); sg.addColorStop(0.6,`rgba(${col},${(0.25+0.4*n.flash)*A})`); sg.addColorStop(1,`rgba(${col},0)`); c2.fillStyle=sg; c2.beginPath(); c2.arc(n.x,n.y,r*2.6,0,6.283); c2.fill(); });
+    links.forEach(l=>{ const gg=g(l.seg,T); if(gg<=0) return; const x1=l.seg.x0+(l.seg.x1-l.seg.x0)*gg,y1=l.seg.y0+(l.seg.y1-l.seg.y0)*gg; const col=l.A.rgb.join(','); c2.strokeStyle=`rgba(${col},${0.16*fadeAll})`; c2.lineWidth=9; c2.beginPath(); c2.moveTo(l.seg.x0,l.seg.y0); c2.lineTo(x1,y1); c2.stroke(); c2.strokeStyle=`rgba(${col},${0.85*fadeAll})`; c2.lineWidth=2.2; c2.beginPath(); c2.moveTo(l.seg.x0,l.seg.y0); c2.lineTo(x1,y1); c2.stroke(); if(gg<1){ c2.fillStyle='rgba(255,255,255,0.9)'; c2.beginPath(); c2.arc(x1,y1,2,0,6.283); c2.fill(); } });
+    imps.forEach(m=>{ const p=pointOn(m.c,Math.max(0,m.d)); const p0=pointOn(m.c,Math.max(0,m.d-m.dir*14)); const col=m.stage==='s'?'255,255,255':m.n.rgb.join(','); const gr=c2.createLinearGradient(p0[0],p0[1],p[0],p[1]); gr.addColorStop(0,`rgba(${col},0)`); gr.addColorStop(1,`rgba(${col},${0.95*fadeAll})`); c2.strokeStyle=gr; c2.lineWidth=3.2; c2.beginPath(); c2.moveTo(p0[0],p0[1]); c2.lineTo(p[0],p[1]); c2.stroke(); const d=c2.createRadialGradient(p[0],p[1],0,p[0],p[1],7); d.addColorStop(0,`rgba(255,255,255,${0.95*fadeAll})`); d.addColorStop(0.4,`rgba(${col},${0.8*fadeAll})`); d.addColorStop(1,`rgba(${col},0)`); c2.fillStyle=d; c2.beginPath(); c2.arc(p[0],p[1],7,0,6.283); c2.fill(); });
+    for(let i=sparks.length-1;i>=0;i--){ const sp=sparks[i]; const p=(T-sp.t0)/700; if(p>=1){ sparks.splice(i,1); continue; } const R=4+26*p*sp.amp; c2.strokeStyle=`rgba(${sp.rgb.join(',')},${(1-p)*0.9*fadeAll})`; c2.lineWidth=1.5; c2.beginPath(); c2.arc(sp.x,sp.y,R,0,6.283); c2.stroke(); if(p<0.3){ const d=c2.createRadialGradient(sp.x,sp.y,0,sp.x,sp.y,14*sp.amp); d.addColorStop(0,`rgba(255,255,255,${(1-p/0.3)*fadeAll})`); d.addColorStop(1,'rgba(255,255,255,0)'); c2.fillStyle=d; c2.beginPath(); c2.arc(sp.x,sp.y,14*sp.amp,0,6.283); c2.fill(); } }
+    c2.restore(); }
+  let lastT=0; function loop(ts){ if(!on) return; if(!t0) t0=ts; let T=ts-t0; if(T>14800){ cycle++; t0=ts; T=0; build(); } const dt=Math.min(50,ts-lastT||16); lastT=ts; step(T,dt); draw(T); raf=requestAnimationFrame(loop); }
+  function size(){ D2=Math.min(2,devicePixelRatio||1); W2=innerWidth; H2=innerHeight; cv2.width=W2*D2; cv2.height=H2*D2; }
+  addEventListener('resize',()=>{ if(on) size(); });
+  return { show(t,sub){ L('ld-t').textContent=t||'Loading'; L('ld-s').textContent=sub||''; if(on) return; on=true; size(); t0=0; build(); el.classList.add('on'); requestAnimationFrame(()=>el.classList.add('show')); raf=requestAnimationFrame(loop); },
+           hide(){ if(!on) return; on=false; cancelAnimationFrame(raf); el.classList.remove('show'); setTimeout(()=>el.classList.remove('on'),420); },
+           get visible(){ return on; } };
+})();
+window.Cerebrum.loader=Loader;
+// show on first paint, and whenever the data layer is fetching
+Loader.show('Waking Cerebrum',`loading catalog · ${COUNT.toLocaleString()} neurons · ${kinds.length} kinds`); setTimeout(()=>Loader.hide(),2600);
 
 resize(); updateCrumb(); caption('Resting state','spontaneous activity · ambient replay of recent traffic',3000);
 requestAnimationFrame(frame);

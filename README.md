@@ -30,3 +30,9 @@ window.Cerebrum.setData({
 ```
 
 `window.Cerebrum.openLobe(i)` opens a lobe programmatically (0 Grounding, 1 Governance, 2 Agent, 3 Executable).
+
+### Loader (drill build)
+
+`window.Cerebrum.loader.show(title, subtitle)` and `.hide()` show a close-up neuron animation (dendrites and axon growing,
+impulses travelling, the view pulling back, synapses forming with other neurons). Use it while the catalog is loading or
+a request is slow; the drill build shows it on first paint and while a lobe's data is being read.
