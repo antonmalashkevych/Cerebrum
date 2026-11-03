@@ -745,49 +745,69 @@ const Loader=(()=>{
   const el=L('loader'), cv2=L('lcv'), c2=cv2.getContext('2d'); let on=false, raf=0, t0=0, rs=1, cycle=0; let W2=0,H2=0,D2=1;
   let neurons=[], links=[], imps=[], sparks=[];
   const rnd2=()=>{ rs|=0; rs=rs+0x6D2B79F5|0; let t=Math.imul(rs^rs>>>15,1|rs); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; };
-  function makeNeuron(x,y,rot,rgb,gStart,fast,axLen){ const n={x,y,rgb,segs:[],tips:[],axon:[],soma:9+rnd2()*3,flash:0,alpha:0,gStart};
-    const dur=fast?350:900;
-    const grow=(x0,y0,ang,len,depth,parent,start)=>{ const x1=x0+Math.cos(ang)*len, y1=y0+Math.sin(ang)*len; const seg={x0,y0,x1,y1,len,depth,parent,start,dur,kind:'d',ch:0}; n.segs.push(seg); if(parent) parent.ch++;
-      const kids=depth<3?(1+(rnd2()<0.75?1:0)+(depth===0&&rnd2()<0.4?1:0)):0; if(!kids){ n.tips.push(seg); return; }
-      for(let k=0;k<kids;k++){ const a=ang+(rnd2()-0.5)*1.5+(k-(kids-1)/2)*0.5; grow(x1,y1,a,len*(0.66+rnd2()*0.14),depth+1,seg,start+dur*0.85); } };
-    const trunks=5+Math.floor(rnd2()*3); for(let i=0;i<trunks;i++){ const a=rot+Math.PI*0.35+(i/(trunks-1))*Math.PI*1.3+(rnd2()-0.5)*0.3; grow(x,y,a,58+rnd2()*40,0,null,gStart+i*120); }
-    // axon: a long chain opposite the dendrites with a small terminal tuft
-    let ax=x,ay=y,aa=rot-Math.PI*0.0+(rnd2()-0.5)*0.3,prev=null; const axStart=gStart+dur*1.6; const segLen=(axLen||260)/5; for(let i=0;i<5;i++){ const len=segLen*(0.85+rnd2()*0.3); const x1=ax+Math.cos(aa)*len,y1=ay+Math.sin(aa)*len; const seg={x0:ax,y0:ay,x1,y1,len,depth:0,parent:prev,start:axStart+i*dur*0.5,dur:dur*0.6,kind:'a'}; n.segs.push(seg); n.axon.push(seg); prev=seg; ax=x1; ay=y1; aa+=(rnd2()-0.5)*0.5; }
-    n.axonEnd=prev; return n; }
+  // geometry helpers: every process is a quadratic curve with a width that tapers from w0 to w1
+  const qpt=(sg,u)=>{ const v=1-u; return [v*v*sg.x0+2*v*u*sg.cx+u*u*sg.x1, v*v*sg.y0+2*v*u*sg.cy+u*u*sg.y1]; };
+  const qtan=(sg,u)=>{ const tx=2*(1-u)*(sg.cx-sg.x0)+2*u*(sg.x1-sg.cx), ty=2*(1-u)*(sg.cy-sg.y0)+2*u*(sg.y1-sg.cy); const l=Math.hypot(tx,ty)||1; return [tx/l,ty/l]; };
+  function makeSeg(x0,y0,ang,len,w0,w1,wig,kind){ const x1=x0+Math.cos(ang)*len, y1=y0+Math.sin(ang)*len; const mx=(x0+x1)/2,my=(y0+y1)/2; const nx=-Math.sin(ang),ny=Math.cos(ang); const o=(rnd2()-0.5)*len*wig; return {x0,y0,x1,y1,cx:mx+nx*o,cy:my+ny*o,len,w0,w1,kind,spines:[]}; }
+  function makeNeuron(x,y,rot,rgb,gStart,fast,axLen){ const n={x,y,rgb,segs:[],tips:[],axon:[],soma:10+rnd2()*4,flash:0,alpha:0,gStart,trunkAngs:[]};
+    const dur=fast?380:950;
+    const grow=(x0,y0,ang,len,depth,parent,start,w0)=>{ const w1=Math.max(0.3,w0*(0.62+rnd2()*0.1)); const seg=makeSeg(x0,y0,ang,len,w0,w1,0.5,'d'); Object.assign(seg,{depth,parent,start,dur:dur*(0.8+rnd2()*0.4)}); n.segs.push(seg);
+      if(w0>1.1){ const cnt=Math.floor(len/7); for(let k=0;k<cnt;k++) seg.spines.push({u:0.08+rnd2()*0.86,side:rnd2()<0.5?1:-1,l:1.6+rnd2()*2.2,b:rnd2()<0.6}); }
+      const kids=depth<4?(len<14?0:(1+(rnd2()<0.7?1:0)+(depth<=1&&rnd2()<0.35?1:0))):0; if(!kids){ n.tips.push(seg); return; }
+      const [tx,ty]=qtan(seg,1); const a0=Math.atan2(ty,tx);
+      for(let k=0;k<kids;k++){ const a=a0+(kids===1?(rnd2()-0.5)*0.5:(k-(kids-1)/2)*(0.55+rnd2()*0.45)+(rnd2()-0.5)*0.25); grow(seg.x1,seg.y1,a,len*(0.6+rnd2()*0.2),depth+1,seg,start+seg.dur*0.9,w1); } };
+    const trunks=4+Math.floor(rnd2()*3); for(let i=0;i<trunks;i++){ const a=rot+Math.PI*0.32+(i/(trunks-1))*Math.PI*1.36+(rnd2()-0.5)*0.28; n.trunkAngs.push(a); grow(x+Math.cos(a)*n.soma*0.8,y+Math.sin(a)*n.soma*0.8,a,52+rnd2()*46,0,null,gStart+i*110,2.6+rnd2()*1.2); }
+    // axon: hillock, thin myelinated shaft with nodes, terminal bouton
+    let ax=x+Math.cos(rot)*n.soma*0.9,ay=y+Math.sin(rot)*n.soma*0.9,aa=rot+(rnd2()-0.5)*0.25,prev=null; const axStart=gStart+dur*1.7; const segLen=(axLen||260)/5;
+    for(let i=0;i<5;i++){ const len=segLen*(0.85+rnd2()*0.3); const seg=makeSeg(ax,ay,aa,len,i===0?2.2:1.5,1.4,0.18,'a'); Object.assign(seg,{depth:0,parent:prev,start:axStart+i*dur*0.5,dur:dur*0.6,myelin:i>0}); n.segs.push(seg); n.axon.push(seg); prev=seg; ax=seg.x1; ay=seg.y1; aa+=(rnd2()-0.5)*0.45; }
+    n.axonEnd=prev;
+    // soma outline: pyramidal-ish blob with bulges toward the dendrite roots
+    n.blob=[]; const ph=rnd2()*6.283; for(let i=0;i<22;i++){ const a=i/22*6.283; let r=n.soma*(1+0.12*Math.sin(3*a+ph)+0.07*Math.sin(7*a+ph*2)); n.trunkAngs.forEach(t=>{ const c=Math.cos(a-t); if(c>0) r+=n.soma*0.42*Math.pow(c,6); }); const c=Math.cos(a-rot); if(c>0) r+=n.soma*0.3*Math.pow(c,8); n.blob.push([x+Math.cos(a)*r,y+Math.sin(a)*r]); }
+    n.nuc=[x+(rnd2()-0.5)*n.soma*0.5,y+(rnd2()-0.5)*n.soma*0.5,n.soma*0.42];
+    return n; }
   const g=(seg,t)=>Math.max(0,Math.min(1,(t-seg.start)/seg.dur));
   const chain=seg=>{ const c=[]; while(seg){ c.unshift(seg); seg=seg.parent; } return c; };
   const chainLen=c=>c.reduce((a,s)=>a+s.len,0);
-  const pointOn=(c,d)=>{ for(const s of c){ if(d<=s.len){ const u=d/s.len; return [s.x0+(s.x1-s.x0)*u,s.y0+(s.y1-s.y0)*u]; } d-=s.len; } const s=c[c.length-1]; return [s.x1,s.y1]; };
+  const pointOn=(c,d)=>{ for(const s of c){ if(d<=s.len) return qpt(s,d/s.len); d-=s.len; } const s=c[c.length-1]; return [s.x1,s.y1]; };
   function build(){ rs=1000+cycle*7919; neurons=[]; links=[]; imps=[]; sparks=[];
     const cols=[LOBES[0].rgb,LOBES[3].rgb,LOBES[2].rgb,LOBES[1].rgb]; const main=cols[cycle%4];
-    // axons point at their planned target; dendrites face away from it. main → n1, n2 → main, n3 → n1
     const o=[[430,-150],[-400,190],[380,260]]; const ang=(a,b)=>Math.atan2(b[1]-a[1],b[0]-a[0]); const dist=(a,b)=>Math.hypot(b[0]-a[0],b[1]-a[1]);
     neurons.push(makeNeuron(0,0,ang([0,0],o[0])+(rnd2()-0.5)*0.2,main,200,false,dist([0,0],o[0])*0.55));
     const rots=[ang(o[0],[0,0])+Math.PI, ang(o[1],[0,0]), ang(o[2],o[0])]; const lens=[220, dist(o[1],[0,0])*0.55, dist(o[2],o[0])*0.55];
     o.forEach((pt,i)=>{ const n=makeNeuron(pt[0],pt[1],rots[i]+(rnd2()-0.5)*0.2,cols[(cycle+1+i)%4],4600+i*300,true,lens[i]); n.hidden=true; neurons.push(n); });
-    // planned connections: main axon → neuron1 tip at 8000; neuron2 axon → main tip at 9600; neuron3 axon → neuron1 tip at 10800
-    const plan=[[0,1,8000],[2,0,9600],[3,1,10800]]; plan.forEach(([a,b,at])=>{ const A=neurons[a],B=neurons[b]; const end=A.axonEnd; const tip=B.tips.slice().sort((p,q)=>Math.hypot(p.x1-end.x1,p.y1-end.y1)-Math.hypot(q.x1-end.x1,q.y1-end.y1))[0]; links.push({A,B,tip,at,seg:{x0:end.x1,y0:end.y1,x1:tip.x1,y1:tip.y1,len:Math.hypot(tip.x1-end.x1,tip.y1-end.y1),start:at,dur:1100},formed:false}); }); }
+    const plan=[[0,1,8000],[2,0,9600],[3,1,10800]]; plan.forEach(([a,b,at])=>{ const A=neurons[a],B=neurons[b]; const end=A.axonEnd; const tip=B.tips.slice().sort((p,q)=>Math.hypot(p.x1-end.x1,p.y1-end.y1)-Math.hypot(q.x1-end.x1,q.y1-end.y1))[0]; const seg=makeSeg(end.x1,end.y1,Math.atan2(tip.y1-end.y1,tip.x1-end.x1),Math.hypot(tip.x1-end.x1,tip.y1-end.y1),1.3,1.1,0.2,'a'); seg.x1=tip.x1; seg.y1=tip.y1; Object.assign(seg,{start:at,dur:1100}); links.push({A,B,tip,at,seg,formed:false}); }); }
   function spawn(n,T){ const ready=n.tips.filter(s=>g(s,T)>=1); if(!ready.length) return; const tip=ready[Math.floor(rnd2()*ready.length)]; const c=chain(tip); imps.push({n,c,d:chainLen(c),dir:-1,speed:0.11+rnd2()*0.06,stage:'d'}); }
-  function step(T,dt){ // impulses
+  function step(T,dt){
     neurons.forEach((n,i)=>{ if(n.hidden&&T<4600) return; if(rnd2()<dt*(i===0?0.0018:0.0007)) spawn(n,T); n.flash*=Math.pow(0.5,dt/160); });
     for(let i=imps.length-1;i>=0;i--){ const m=imps[i]; m.d+=m.dir*m.speed*dt;
       if(m.stage==='d'&&m.d<=0){ m.n.flash=1; imps.splice(i,1); const ax=m.n.axon; if(ax.length&&g(ax[0],T)>=1){ setTimeout(()=>imps.push({n:m.n,c:ax,d:0,dir:1,speed:0.16,stage:'a'}),120); } continue; }
       if(m.stage==='a'){ const L2=chainLen(m.c); const grown=m.c.reduce((a,s)=>a+s.len*g(s,T),0); if(m.d>=Math.min(L2,grown)){ imps.splice(i,1); const lk=links.find(l=>l.A===m.n&&l.formed); if(lk){ imps.push({n:m.n,c:[lk.seg],d:0,dir:1,speed:0.14,stage:'s',lk}); } else sparks.push({x:m.c[m.c.length-1].x1,y:m.c[m.c.length-1].y1,t0:T,rgb:m.n.rgb,amp:0.5}); } continue; }
       if(m.stage==='s'&&m.d>=m.lk.seg.len){ imps.splice(i,1); sparks.push({x:m.lk.tip.x1,y:m.lk.tip.y1,t0:T,rgb:[255,255,255],amp:1}); const c=chain(m.lk.tip); imps.push({n:m.lk.B,c,d:chainLen(c),dir:-1,speed:0.13,stage:'d'}); } }
     links.forEach(l=>{ if(!l.formed&&g(l.seg,T)>=1){ l.formed=true; sparks.push({x:l.tip.x1,y:l.tip.y1,t0:T,rgb:[255,255,255],amp:1.6}); } }); }
+  // draw a tapered, partially grown curve as short pieces
+  function strokeSeg(sg,gg,col,alpha,wmul,glow){ const pieces=Math.max(2,Math.ceil(sg.len/9)); let prev=qpt(sg,0); for(let k=1;k<=pieces;k++){ const u=k/pieces*gg; const pt=qpt(sg,u); const w=(sg.w0+(sg.w1-sg.w0)*u)*wmul; c2.strokeStyle=`rgba(${col},${alpha})`; c2.lineWidth=glow?w*3.2+1.5:w; c2.beginPath(); c2.moveTo(prev[0],prev[1]); c2.lineTo(pt[0],pt[1]); c2.stroke(); prev=pt; } return prev; }
   function draw(T){ c2.setTransform(D2,0,0,D2,0,0); c2.clearRect(0,0,W2,H2); const vg=c2.createRadialGradient(W2/2,H2/2,0,W2/2,H2/2,Math.max(W2,H2)*0.7); vg.addColorStop(0,'#0c0e1c'); vg.addColorStop(1,'#05060b'); c2.fillStyle=vg; c2.fillRect(0,0,W2,H2);
     const zoomT=Math.max(0,Math.min(1,(T-4200)/3000)); const e=zoomT<0.5?2*zoomT*zoomT:1-Math.pow(-2*zoomT+2,2)/2; const scale=(1.15-0.62*e)*Math.min(W2,H2)/520; const cx=W2/2+(-60+60*e)*scale, cy=H2/2+(20-10*e)*scale;
     c2.save(); c2.translate(cx,cy); c2.scale(scale,scale); c2.lineCap='round'; c2.lineJoin='round';
     const fadeAll=T>13800?Math.max(0,1-(T-13800)/900):1;
-    neurons.forEach(n=>{ n.alpha=n.hidden?Math.max(0,Math.min(1,(T-4600)/1200)):1; const A=n.alpha*fadeAll; if(A<=0) return; const col=n.rgb.join(',');
-      // glow pass then core pass
-      for(let pass=0;pass<2;pass++){ n.segs.forEach(sg=>{ const gg=g(sg,T); if(gg<=0) return; const x1=sg.x0+(sg.x1-sg.x0)*gg,y1=sg.y0+(sg.y1-sg.y0)*gg; const w=sg.kind==='a'?1.9:Math.max(0.45,2.0-sg.depth*0.5);
-        c2.strokeStyle=pass?`rgba(${col},${0.9*A})`:`rgba(${col},${0.16*A})`; c2.lineWidth=pass?w:w*4; c2.beginPath(); c2.moveTo(sg.x0,sg.y0); c2.lineTo(x1,y1); c2.stroke();
-        if(pass&&gg<1&&gg>0){ c2.fillStyle=`rgba(255,255,255,${0.8*A})`; c2.beginPath(); c2.arc(x1,y1,1.6,0,6.283); c2.fill(); } }); }
-      // soma
-      const r=n.soma*(1+0.35*n.flash); const sg=c2.createRadialGradient(n.x,n.y,0,n.x,n.y,r*2.6); sg.addColorStop(0,`rgba(255,255,255,${(0.9+0.1*n.flash)*A})`); sg.addColorStop(0.3,`rgba(${col},${0.95*A})`); sg.addColorStop(0.6,`rgba(${col},${(0.25+0.4*n.flash)*A})`); sg.addColorStop(1,`rgba(${col},0)`); c2.fillStyle=sg; c2.beginPath(); c2.arc(n.x,n.y,r*2.6,0,6.283); c2.fill(); });
-    links.forEach(l=>{ const gg=g(l.seg,T); if(gg<=0) return; const x1=l.seg.x0+(l.seg.x1-l.seg.x0)*gg,y1=l.seg.y0+(l.seg.y1-l.seg.y0)*gg; const col=l.A.rgb.join(','); c2.strokeStyle=`rgba(${col},${0.16*fadeAll})`; c2.lineWidth=9; c2.beginPath(); c2.moveTo(l.seg.x0,l.seg.y0); c2.lineTo(x1,y1); c2.stroke(); c2.strokeStyle=`rgba(${col},${0.85*fadeAll})`; c2.lineWidth=2.2; c2.beginPath(); c2.moveTo(l.seg.x0,l.seg.y0); c2.lineTo(x1,y1); c2.stroke(); if(gg<1){ c2.fillStyle='rgba(255,255,255,0.9)'; c2.beginPath(); c2.arc(x1,y1,2,0,6.283); c2.fill(); } });
-    imps.forEach(m=>{ const p=pointOn(m.c,Math.max(0,m.d)); const p0=pointOn(m.c,Math.max(0,m.d-m.dir*14)); const col=m.stage==='s'?'255,255,255':m.n.rgb.join(','); const gr=c2.createLinearGradient(p0[0],p0[1],p[0],p[1]); gr.addColorStop(0,`rgba(${col},0)`); gr.addColorStop(1,`rgba(${col},${0.95*fadeAll})`); c2.strokeStyle=gr; c2.lineWidth=3.2; c2.beginPath(); c2.moveTo(p0[0],p0[1]); c2.lineTo(p[0],p[1]); c2.stroke(); const d=c2.createRadialGradient(p[0],p[1],0,p[0],p[1],7); d.addColorStop(0,`rgba(255,255,255,${0.95*fadeAll})`); d.addColorStop(0.4,`rgba(${col},${0.8*fadeAll})`); d.addColorStop(1,`rgba(${col},0)`); c2.fillStyle=d; c2.beginPath(); c2.arc(p[0],p[1],7,0,6.283); c2.fill(); });
+    neurons.forEach(n=>{ n.alpha=n.hidden?Math.max(0,Math.min(1,(T-4600)/1200)):1; const A=n.alpha*fadeAll; if(A<=0) return; const col=n.rgb.join(','); const lite=n.rgb.map(v=>Math.min(255,Math.round(v*0.55+115))).join(',');
+      // glow pass
+      n.segs.forEach(sg=>{ const gg=g(sg,T); if(gg>0) strokeSeg(sg,gg,col,0.09*A,1,true); });
+      // membrane pass: darker rim then lighter core gives a tube feel
+      n.segs.forEach(sg=>{ const gg=g(sg,T); if(gg<=0) return; strokeSeg(sg,gg,col,0.95*A,1.25,false); const tip=strokeSeg(sg,gg,lite,0.55*A,0.45,false);
+        if(sg.kind==='d'){ sg.spines.forEach(sp=>{ if(gg<sp.u) return; const p=qpt(sg,sp.u), tn=qtan(sg,sp.u); const w=(sg.w0+(sg.w1-sg.w0)*sp.u); const ex=p[0]-tn[1]*sp.side*(w/2+sp.l), ey=p[1]+tn[0]*sp.side*(w/2+sp.l); c2.strokeStyle=`rgba(${col},${0.7*A})`; c2.lineWidth=0.5; c2.beginPath(); c2.moveTo(p[0],p[1]); c2.lineTo(ex,ey); c2.stroke(); if(sp.b){ c2.fillStyle=`rgba(${lite},${0.8*A})`; c2.beginPath(); c2.arc(ex,ey,0.75,0,6.283); c2.fill(); } }); }
+        if(sg.kind==='a'&&sg.myelin){ // myelin sheath beads with nodes of Ranvier between them
+          for(let b=0;b<2;b++){ const u0=0.06+b*0.5, u1=Math.min(gg,u0+0.38); if(u1<=u0) continue; c2.strokeStyle=`rgba(${lite},${0.42*A})`; c2.lineWidth=sg.w0*2.6; c2.beginPath(); let p=qpt(sg,u0); c2.moveTo(p[0],p[1]); for(let k=1;k<=6;k++){ p=qpt(sg,u0+(u1-u0)*k/6); c2.lineTo(p[0],p[1]); } c2.stroke(); c2.strokeStyle=`rgba(${col},${0.5*A})`; c2.lineWidth=0.6; c2.beginPath(); p=qpt(sg,u0); c2.moveTo(p[0],p[1]); for(let k=1;k<=6;k++){ p=qpt(sg,u0+(u1-u0)*k/6); c2.lineTo(p[0],p[1]); } c2.stroke(); } }
+        if(gg<1&&gg>0){ c2.fillStyle=`rgba(255,255,255,${0.85*A})`; c2.beginPath(); c2.arc(tip[0],tip[1],1.5,0,6.283); c2.fill(); } });
+      // terminal bouton
+      if(n.axonEnd&&g(n.axonEnd,T)>=1){ c2.fillStyle=`rgba(${lite},${0.9*A})`; c2.beginPath(); c2.arc(n.axonEnd.x1,n.axonEnd.y1,2.6,0,6.283); c2.fill(); }
+      // soma: blob membrane, cytoplasm gradient, nucleus
+      const r=n.soma*(1+0.12*n.flash); const b=n.blob; c2.beginPath(); for(let i=0;i<b.length;i++){ const p=b[i], q=b[(i+1)%b.length]; const mx=(p[0]+q[0])/2,my=(p[1]+q[1])/2; if(i===0) c2.moveTo(mx,my); const nx=n.x+(p[0]-n.x)*(1+0.12*n.flash), ny=n.y+(p[1]-n.y)*(1+0.12*n.flash); const nmx=n.x+(mx-n.x)*(1+0.12*n.flash), nmy=n.y+(my-n.y)*(1+0.12*n.flash); const qq=b[(i+1)%b.length]; const q2x=n.x+((qq[0]+b[(i+2)%b.length][0])/2-n.x)*(1+0.12*n.flash), q2y=n.y+((qq[1]+b[(i+2)%b.length][1])/2-n.y)*(1+0.12*n.flash); c2.quadraticCurveTo(n.x+(qq[0]-n.x)*(1+0.12*n.flash),n.y+(qq[1]-n.y)*(1+0.12*n.flash),q2x,q2y); } c2.closePath();
+      const sg=c2.createRadialGradient(n.x-r*0.2,n.y-r*0.2,0,n.x,n.y,r*1.5); sg.addColorStop(0,`rgba(${lite},${0.95*A})`); sg.addColorStop(0.55,`rgba(${col},${0.9*A})`); sg.addColorStop(1,`rgba(${col},${0.55*A})`); c2.fillStyle=sg; c2.fill(); c2.strokeStyle=`rgba(${lite},${0.7*A})`; c2.lineWidth=0.8; c2.stroke();
+      const halo=c2.createRadialGradient(n.x,n.y,r,n.x,n.y,r*3.2); halo.addColorStop(0,`rgba(${col},${(0.22+0.5*n.flash)*A})`); halo.addColorStop(1,`rgba(${col},0)`); c2.fillStyle=halo; c2.beginPath(); c2.arc(n.x,n.y,r*3.2,0,6.283); c2.fill();
+      const ng=c2.createRadialGradient(n.nuc[0]-1,n.nuc[1]-1,0,n.nuc[0],n.nuc[1],n.nuc[2]); ng.addColorStop(0,`rgba(255,255,255,${0.9*A})`); ng.addColorStop(0.5,`rgba(${lite},${0.7*A})`); ng.addColorStop(1,`rgba(${col},${0.35*A})`); c2.fillStyle=ng; c2.beginPath(); c2.arc(n.nuc[0],n.nuc[1],n.nuc[2],0,6.283); c2.fill(); c2.fillStyle=`rgba(255,255,255,${0.9*A})`; c2.beginPath(); c2.arc(n.nuc[0]+n.nuc[2]*0.25,n.nuc[1]-n.nuc[2]*0.15,n.nuc[2]*0.3,0,6.283); c2.fill(); });
+    links.forEach(l=>{ const gg=g(l.seg,T); if(gg<=0) return; const col=l.A.rgb.join(','); const lite=l.A.rgb.map(v=>Math.min(255,Math.round(v*0.55+115))).join(','); strokeSeg(l.seg,gg,col,0.1*fadeAll,1,true); strokeSeg(l.seg,gg,col,0.9*fadeAll,1.2,false); const tip=strokeSeg(l.seg,gg,lite,0.5*fadeAll,0.45,false); if(gg<1){ c2.fillStyle='rgba(255,255,255,0.9)'; c2.beginPath(); c2.arc(tip[0],tip[1],1.8,0,6.283); c2.fill(); } else { c2.fillStyle=`rgba(${lite},${0.9*fadeAll})`; c2.beginPath(); c2.arc(l.seg.x1,l.seg.y1,2.8,0,6.283); c2.fill(); } });
+    imps.forEach(m=>{ const p=pointOn(m.c,Math.max(0,m.d)); const p0=pointOn(m.c,Math.max(0,m.d-m.dir*14)); const col=m.stage==='s'?'255,255,255':m.n.rgb.join(','); const gr=c2.createLinearGradient(p0[0],p0[1],p[0],p[1]); gr.addColorStop(0,`rgba(${col},0)`); gr.addColorStop(1,`rgba(${col},${0.95*fadeAll})`); c2.strokeStyle=gr; c2.lineWidth=3.4; c2.beginPath(); c2.moveTo(p0[0],p0[1]); c2.lineTo(p[0],p[1]); c2.stroke(); const d=c2.createRadialGradient(p[0],p[1],0,p[0],p[1],7); d.addColorStop(0,`rgba(255,255,255,${0.95*fadeAll})`); d.addColorStop(0.4,`rgba(${col},${0.8*fadeAll})`); d.addColorStop(1,`rgba(${col},0)`); c2.fillStyle=d; c2.beginPath(); c2.arc(p[0],p[1],7,0,6.283); c2.fill(); });
     for(let i=sparks.length-1;i>=0;i--){ const sp=sparks[i]; const p=(T-sp.t0)/700; if(p>=1){ sparks.splice(i,1); continue; } const R=4+26*p*sp.amp; c2.strokeStyle=`rgba(${sp.rgb.join(',')},${(1-p)*0.9*fadeAll})`; c2.lineWidth=1.5; c2.beginPath(); c2.arc(sp.x,sp.y,R,0,6.283); c2.stroke(); if(p<0.3){ const d=c2.createRadialGradient(sp.x,sp.y,0,sp.x,sp.y,14*sp.amp); d.addColorStop(0,`rgba(255,255,255,${(1-p/0.3)*fadeAll})`); d.addColorStop(1,'rgba(255,255,255,0)'); c2.fillStyle=d; c2.beginPath(); c2.arc(sp.x,sp.y,14*sp.amp,0,6.283); c2.fill(); } }
     c2.restore(); }
   let lastT=0; function loop(ts){ if(!on) return; if(!t0) t0=ts; let T=ts-t0; if(T>14800){ cycle++; t0=ts; T=0; build(); } const dt=Math.min(50,ts-lastT||16); lastT=ts; step(T,dt); draw(T); raf=requestAnimationFrame(loop); }
