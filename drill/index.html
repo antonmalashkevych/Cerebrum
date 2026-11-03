@@ -569,9 +569,10 @@ cv.addEventListener('pointermove',ev=>{ lastInput=now;
     return; }
   hover=-1; let best=1e9; clusters.forEach((c,i)=>{ proj(c.cx,c.cy,c.cz,P); const d=Math.hypot(ev.clientX-P[0],ev.clientY-P[1]); const rr=c.r*P[2]*cam.zoom*0.95; if(d<rr && d<best){best=d;hover=i;} });
   cv.classList.toggle('hover',hover>=0); const tip=document.getElementById('tip'); if(hover>=0){ const c=clusters[hover]; tip.style.display='block'; tip.style.left=(ev.clientX+14)+'px'; tip.style.top=(ev.clientY+14)+'px'; tip.innerHTML=`<b>${c.name}</b>${c.count.toLocaleString()} neurons · ${c.sub}<br>${bundles.filter(b=>b.a===hover||b.b===hover).reduce((a,b)=>a+b.n,0).toLocaleString()} synapses to other ${mode==='lobe'?'lobes':'clusters'}`; } else tip.style.display='none'; });
-cv.addEventListener('pointerup',ev=>{ if(drag&&!drag.moved&&hover>=0&&!drag.pan){ if(focus===hover) clearFocus(); else setFocus(hover); } drag=null; cv.classList.remove('drag'); });
+let clickTimer=null;
+cv.addEventListener('pointerup',ev=>{ if(drag&&!drag.moved&&hover>=0&&!drag.pan){ const h=hover; clearTimeout(clickTimer); clickTimer=setTimeout(()=>{ if(focus===h) clearFocus(); else setFocus(h); },260); } drag=null; cv.classList.remove('drag'); });
 cv.addEventListener('wheel',ev=>{ ev.preventDefault(); autoOrbit=false; lastInput=now; const f=Math.exp(-ev.deltaY*0.0012); camT.zoom=Math.max(0.12,Math.min(6,camT.zoom*f)); if(focus!==null && mode==='lobe' && !layerOpen && camT.zoom>focusZoom*1.45) openLayer(focus); },{passive:false});
-cv.addEventListener('dblclick',ev=>{ if(focus!==null && mode==='lobe' && hover===focus) openLayer(focus); });
+cv.addEventListener('dblclick',ev=>{ clearTimeout(clickTimer); if(hover<0||mode!=='lobe'||layerOpen) return; if(focus!==hover) setFocus(hover); openLayer(hover); });
 
 // ---------- render ----------
 let now=performance.now(), last=now;
