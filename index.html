@@ -66,6 +66,9 @@ body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--body);overf
 #hud{right:max(16px,env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));text-align:right;font-family:var(--mono);font-size:11px;color:var(--fg-dim);line-height:1.7;font-variant-numeric:tabular-nums}
 #hud b{color:var(--fg);font-weight:500}
 #hud .lvl{color:var(--accent);letter-spacing:.1em}
+.btn.icon{padding:7px 9px;display:inline-flex;align-items:center;color:var(--fg)}
+.btn.icon .x{display:none} .btn.icon[aria-pressed="false"] .x{display:block} .btn.icon[aria-pressed="false"] .w1,.btn.icon[aria-pressed="false"] .w2{display:none}
+.btn.icon[aria-pressed="false"]{color:var(--fg-dim)}
 #tip{position:fixed;z-index:6;pointer-events:none;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-family:var(--mono);font-size:11px;color:var(--fg-dim);display:none;backdrop-filter:blur(8px)}
 #tip b{color:var(--fg);font-family:var(--display);font-size:13px;letter-spacing:.06em;text-transform:uppercase;display:block;margin-bottom:2px}
 #hint{top:calc(70px + env(safe-area-inset-top,0px));right:max(16px,env(safe-area-inset-right,0px));font-family:var(--mono);font-size:10px;color:var(--fg-mute);letter-spacing:.06em;text-align:right}
@@ -94,7 +97,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--body);overf
     <button id="m-edit">Edit</button>
   </div>
   <button class="btn" id="reset" title="Clear every signal, return to L1 lobes and the home camera">Reset</button>
-  <button class="btn" id="snd" aria-pressed="true">Sound on</button>
+  <button class="btn icon" id="snd" aria-pressed="true" aria-label="Sound on" title="Sound on"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5v5h3.5L12 18V6L7.5 9.5H4z" fill="currentColor" stroke="none"/><path class="w1" d="M15 9.5a3.5 3.5 0 0 1 0 5"/><path class="w2" d="M17.5 7a7 7 0 0 1 0 10"/><path class="x" d="M16 9.5l5 5M21 9.5l-5 5"/></svg></button>
   <button class="btn" id="fs">Full screen</button>
 </div>
 
@@ -471,7 +474,7 @@ function sparkSound(amp){
 function stopScore(){ scoreOn=false; clearTimeout(scoreTimer); if(master){ master.gain.cancelScheduledValues(AC.currentTime); master.gain.linearRampToValueAtTime(0,AC.currentTime+2.5); } }
 let scoreWanted=true;
 function tryStart(){ if(!scoreWanted) return; try{ if(!scoreOn) startScore(); if(AC && AC.state!=='running'){ AC.resume().catch(()=>{}); } }catch(e){} }
-document.getElementById('snd').onclick=function(ev){ ev.stopPropagation(); if(scoreWanted){ scoreWanted=false; stopScore(); this.textContent='Sound off'; this.setAttribute('aria-pressed','false'); } else { scoreWanted=true; this.textContent='Sound on'; this.setAttribute('aria-pressed','true'); tryStart(); caption('Score','original ambient organ · synthesized live in the page',2600); } };
+document.getElementById('snd').onclick=function(ev){ ev.stopPropagation(); if(scoreWanted){ scoreWanted=false; stopScore(); this.setAttribute('aria-pressed','false'); this.setAttribute('aria-label','Sound off'); this.title='Sound off'; } else { scoreWanted=true; this.setAttribute('aria-pressed','true'); this.setAttribute('aria-label','Sound on'); this.title='Sound on'; tryStart(); caption('Score','original ambient organ · synthesized live in the page',2600); } };
 ['pointerdown','keydown','touchstart','click'].forEach(ev=>addEventListener(ev,tryStart,{capture:true}));
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) tryStart(); });
 function resetCanvas(){
