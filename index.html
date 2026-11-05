@@ -162,12 +162,12 @@ const LOBES = [
 const LOBE_RGB={ dark:[[90,169,255],[255,196,90],[171,140,255],[255,140,70]], light:[[14,154,141],[224,154,10],[194,55,155],[47,95,214]] };
 const THEMES={
   dark:{ stageIn:'#0b0d1a', stageOut:'#05060b', mesh:'120,135,190', meshA:0.05, star:'170,185,230', mote:'170,195,240', moteHead:'200,215,250',
-    spec:[255,255,255], ink:'232,235,245', labelBg:'7,8,15', edge:'235,240,255', edgeA:0.16, spriteCore:null, dimK:0.75, trailA:0.9, softRingK:1, dotK:1, spriteTight:false,
+    spec:[255,255,255], ink:'232,235,245', labelBg:'7,8,15', edge:'235,240,255', edgeA:0.16, spriteCore:null, dimK:0.75, trailA:0.9, softRingK:1, dotK:1, spriteTight:false, aMin:0.5, aRange:0.5, depthFloor:0.2, dimA:0.35,
     haloOp:'source-over', haloK:1, haloWash:null, nebOp:'lighter', nebDraw:'source-over', nebK:1, ringK:1,
     nebPal:[[90,169,255],[255,196,90],[171,140,255],[255,140,70],[70,200,210],[220,90,160]] },
   light:{ stageIn:'#F8FAFD', stageOut:'#E4E9F2', mesh:'71,85,105', meshA:0.06, star:'100,116,139', mote:'100,116,139', moteHead:'71,85,105',
     spec:[176,186,204], ink:'15,23,42', labelBg:'255,255,255', edge:'71,85,105', edgeA:0.2, spriteCore:'hue', dimK:1.0, trailA:0.55,
-    haloOp:'source-over', haloK:1.1, haloWash:null, nebOp:'source-over', nebDraw:'multiply', nebK:2.0, ringK:0.6, softRingK:0.3, dotK:0.78, spriteTight:true,
+    haloOp:'source-over', haloK:1.1, haloWash:null, nebOp:'source-over', nebDraw:'multiply', nebK:2.0, ringK:0.6, softRingK:0.3, dotK:0.78, spriteTight:true, aMin:0.9, aRange:0.1, depthFloor:0.75, dimA:0.22,
     nebPal:[[182,237,230],[251,228,168],[246,198,232],[191,210,255],[221,214,254],[255,214,196]] }
 };
 function detectTheme(){ try{ const q=new URLSearchParams(location.search).get('theme'); if(q==='light'||q==='dark') return q; }catch(e){} const a=document.documentElement.getAttribute('data-theme'); if(a==='light'||a==='dark') return a; return matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'; }
@@ -628,9 +628,9 @@ function frameInner(t){
   for(let i=0;i<LIVE;i++){ const x=PX[i],y=PY[i]; if(x<-10||x>W+10||y<-10||y>H+10) continue;
     const li=LOBE[i]; const born=BORN[i]?Math.min(1,(now-BORN[i])/2500):1; const s=base*SZ[i]*PS[i]*(0.3+0.7*born); const dimmed = focus!==null && !inCluster(i,clusters[focus]);
     const pulse=kinds[KIND[i]].pulse; const pb = pulse>0.02 ? 1+pulse*0.8*(0.5+0.5*Math.sin(t*0.004+kinds[KIND[i]].phase+PH[i]*0.3)) : 1;
-    ctx.globalAlpha = Math.min(1,(dimmed?0.35:(0.5+0.5*BR[i]))*pb*Math.min(1,PS[i]+0.2)); ctx.drawImage((BR[i]>0.72||pb>1.4)?SPR[li]:SPR_DIM[li], x-s/2, y-s/2, s, s); }
+    ctx.globalAlpha = Math.min(1,(dimmed?TH.dimA:(TH.aMin+TH.aRange*BR[i]))*pb*Math.max(TH.depthFloor,Math.min(1,PS[i]+0.2))); ctx.drawImage((BR[i]>0.72||pb>1.4)?SPR[li]:SPR_DIM[li], x-s/2, y-s/2, s, s); }
   ctx.globalAlpha=1;
-  flashes.forEach(f=>{ const p=(now-f.t0)/f.dur; const a=Math.sin(p*Math.PI)*f.amp; if(TH.spriteTight){ const x=PX[f.i],y=PY[f.i]; const rgb=LOBES[LOBE[f.i]].rgb.join(','); const r0=base*0.9*PS[f.i]; ctx.globalAlpha=Math.min(1,a); ctx.fillStyle=`rgb(${rgb})`; ctx.beginPath(); ctx.arc(x,y,r0*(1+0.4*f.amp),0,6.283); ctx.fill(); ctx.strokeStyle=`rgba(${rgb},${Math.max(0,1-p)*0.8})`; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(x,y,r0*(1.6+3*p*f.amp),0,6.283); ctx.stroke(); ctx.globalAlpha=1; return; } const s=base*(3.2+2.5*f.amp)*(0.7+0.3*(1-p))*PS[f.i]; const x=PX[f.i],y=PY[f.i]; ctx.globalAlpha=Math.min(1,a); ctx.drawImage(SPR_FLASH[LOBE[f.i]],x-s/2,y-s/2,s,s); if(f.amp>1.2){ ctx.globalAlpha=Math.min(1,a*0.6); ctx.drawImage(SPR_WHITE,x-s/3,y-s/3,s*0.66,s*0.66);} });
+  flashes.forEach(f=>{ const p=(now-f.t0)/f.dur; const a=Math.sin(p*Math.PI)*f.amp; if(TH.spriteTight){ const x=PX[f.i],y=PY[f.i]; const rgb=LOBES[LOBE[f.i]].rgb.join(','); const r0=base*0.9*PS[f.i]; ctx.globalAlpha=Math.min(1,a); ctx.fillStyle=`rgb(${rgb})`; ctx.beginPath(); ctx.arc(x,y,r0*(0.8+0.15*f.amp),0,6.283); ctx.fill(); ctx.strokeStyle=`rgba(${rgb},${Math.max(0,1-p)*0.6})`; ctx.lineWidth=0.8; ctx.beginPath(); ctx.arc(x,y,r0*(1.2+1.6*p*Math.min(1.5,f.amp)),0,6.283); ctx.stroke(); ctx.globalAlpha=1; return; } const s=base*(3.2+2.5*f.amp)*(0.7+0.3*(1-p))*PS[f.i]; const x=PX[f.i],y=PY[f.i]; ctx.globalAlpha=Math.min(1,a); ctx.drawImage(SPR_FLASH[LOBE[f.i]],x-s/2,y-s/2,s,s); if(f.amp>1.2){ ctx.globalAlpha=Math.min(1,a*0.6); ctx.drawImage(SPR_WHITE,x-s/3,y-s/3,s*0.66,s*0.66);} });
   ctx.globalAlpha=1;
   // signals
   signals.forEach(g=>{ const tt=g.rev?1-g.t:g.t, tp=g.rev?1-Math.max(0,g.t-0.07):Math.max(0,g.t-0.07); let q,q0;
