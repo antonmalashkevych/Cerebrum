@@ -43,3 +43,10 @@ Each ribbon has a centerline cubic; an impulse is an SVG `<circle class="imp">` 
 `offset-distance` animation from 0% to 100%, removed on `animationend`. About one every 1 to 2 seconds, weighted by ribbon
 width, limited to the selected kind when one is chosen. `window.Cerebrum.sankeyPulse.fire(kindName?)` fires one on demand,
 so an archetype run can light the ribbons it actually touched. Disabled under `prefers-reduced-motion`.
+
+## Light theme
+
+Both builds are dark-first and switch to a light palette when Kinetic sets `data-theme="light"` on the root element,
+when the OS prefers light and no `data-theme` is set, or with `?theme=light` on the URL for review. Only colors, gradients,
+blend modes and the aura change; layout and behavior are identical. Light lobe inks: Grounding #2563EB, Governance #C27A0E,
+Agent #7C3AED, Executable #EA580C, with pastel washes for halos and the aura drawn in multiply so they tint the paper.
