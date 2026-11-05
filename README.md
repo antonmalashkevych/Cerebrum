@@ -50,3 +50,9 @@ Both builds are dark-first and switch to a light palette when Kinetic sets `data
 when the OS prefers light and no `data-theme` is set, or with `?theme=light` on the URL for review. Only colors, gradients,
 blend modes and the aura change; layout and behavior are identical. Light has its own palette: Grounding teal #0E9A8D, Governance amber #E09A0A,
 Agent magenta #C2379B, Executable cobalt #2F5FD6: crisp hard-edged dots, ring-style firing, pastel aura in multiply, subtle slate impulses.
+
+### Light preview and token sheet
+
+`drill/light/index.html` shows the drill build in the light theme (it loads `../index.html?theme=light`, so there is
+one source of truth). On GitHub Pages: `/Cerebrum/drill/light/`. Every dark and light color, opacity and blend rule is
+listed in `docs/cerebrum-theme-tokens.xlsx`.
