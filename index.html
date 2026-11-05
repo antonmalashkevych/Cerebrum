@@ -26,15 +26,15 @@
 }
 /* Light theme: ink on paper. Same hue identities, deepened to inks; washes tint the paper instead of glowing. */
 @media (prefers-color-scheme: light){ :root:not([data-theme="dark"]){ color-scheme:light;
-  --bg:#EEF1F6; --fg:#0F172A; --fg-dim:#475569; --fg-mute:#94A3B8; --panel:rgba(255,255,255,.78); --line:rgba(30,41,59,.16); --accent:#C2410C;
-  --grounding:#2563EB; --governance:#C27A0E; --agent:#7C3AED; --executable:#EA580C;
-  --scrim-top:rgba(238,241,246,.9); --accent-soft:rgba(194,65,12,.12); --accent-line:rgba(194,65,12,.5); --hover-wash:rgba(15,23,42,.05);
+  --bg:#EEF1F6; --fg:#0F172A; --fg-dim:#475569; --fg-mute:#94A3B8; --panel:rgba(255,255,255,.78); --line:rgba(30,41,59,.16); --accent:#334155;
+  --grounding:#0E9A8D; --governance:#E09A0A; --agent:#C2379B; --executable:#2F5FD6;
+  --scrim-top:rgba(238,241,246,.9); --accent-soft:rgba(51,65,85,.1); --accent-line:rgba(51,65,85,.45); --hover-wash:rgba(15,23,42,.05);
   --layer-scrim:rgba(238,241,246,.94); --pane-bg:rgba(255,255,255,.74); --th-bg:rgba(246,248,252,.96); --row-line:rgba(30,41,59,.1); --row-hover:rgba(15,23,42,.04);
   --good:#15803D; --good-line:rgba(21,128,61,.4); --gov-line:rgba(194,122,14,.45); --input-bg:rgba(255,255,255,.7); --bar-track:rgba(30,41,59,.15); } }
 :root[data-theme="light"]{ color-scheme:light;
-  --bg:#EEF1F6; --fg:#0F172A; --fg-dim:#475569; --fg-mute:#94A3B8; --panel:rgba(255,255,255,.78); --line:rgba(30,41,59,.16); --accent:#C2410C;
-  --grounding:#2563EB; --governance:#C27A0E; --agent:#7C3AED; --executable:#EA580C;
-  --scrim-top:rgba(238,241,246,.9); --accent-soft:rgba(194,65,12,.12); --accent-line:rgba(194,65,12,.5); --hover-wash:rgba(15,23,42,.05);
+  --bg:#EEF1F6; --fg:#0F172A; --fg-dim:#475569; --fg-mute:#94A3B8; --panel:rgba(255,255,255,.78); --line:rgba(30,41,59,.16); --accent:#334155;
+  --grounding:#0E9A8D; --governance:#E09A0A; --agent:#C2379B; --executable:#2F5FD6;
+  --scrim-top:rgba(238,241,246,.9); --accent-soft:rgba(51,65,85,.1); --accent-line:rgba(51,65,85,.45); --hover-wash:rgba(15,23,42,.05);
   --layer-scrim:rgba(238,241,246,.94); --pane-bg:rgba(255,255,255,.74); --th-bg:rgba(246,248,252,.96); --row-line:rgba(30,41,59,.1); --row-hover:rgba(15,23,42,.04);
   --good:#15803D; --good-line:rgba(21,128,61,.4); --gov-line:rgba(194,122,14,.45); --input-bg:rgba(255,255,255,.7); --bar-track:rgba(30,41,59,.15); }
 
@@ -159,7 +159,7 @@ const LOBES = [
 ];
 
 // ---------- theme: dark-first; light follows Kinetic's data-theme, the OS preference, or ?theme=light ----------
-const LOBE_RGB={ dark:[[90,169,255],[255,196,90],[171,140,255],[255,140,70]], light:[[37,120,255],[245,158,11],[139,92,246],[249,115,22]] };
+const LOBE_RGB={ dark:[[90,169,255],[255,196,90],[171,140,255],[255,140,70]], light:[[14,154,141],[224,154,10],[194,55,155],[47,95,214]] };
 const THEMES={
   dark:{ stageIn:'#0b0d1a', stageOut:'#05060b', mesh:'120,135,190', meshA:0.05, star:'170,185,230', mote:'170,195,240', moteHead:'200,215,250',
     spec:[255,255,255], ink:'232,235,245', labelBg:'7,8,15', edge:'235,240,255', edgeA:0.16, spriteCore:null, dimK:0.75, trailA:0.9, softRingK:1, dotK:1, spriteTight:false,
@@ -168,7 +168,7 @@ const THEMES={
   light:{ stageIn:'#F8FAFD', stageOut:'#E4E9F2', mesh:'71,85,105', meshA:0.06, star:'100,116,139', mote:'100,116,139', moteHead:'71,85,105',
     spec:[176,186,204], ink:'15,23,42', labelBg:'255,255,255', edge:'71,85,105', edgeA:0.2, spriteCore:'hue', dimK:1.0, trailA:0.55,
     haloOp:'source-over', haloK:1.1, haloWash:null, nebOp:'source-over', nebDraw:'multiply', nebK:2.0, ringK:0.6, softRingK:0.3, dotK:0.78, spriteTight:true,
-    nebPal:[[191,219,254],[253,230,138],[221,214,254],[254,215,170],[187,247,208],[251,207,232]] }
+    nebPal:[[182,237,230],[251,228,168],[246,198,232],[191,210,255],[221,214,254],[255,214,196]] }
 };
 function detectTheme(){ try{ const q=new URLSearchParams(location.search).get('theme'); if(q==='light'||q==='dark') return q; }catch(e){} const a=document.documentElement.getAttribute('data-theme'); if(a==='light'||a==='dark') return a; return matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'; }
 let THEME=detectTheme(), TH=THEMES[THEME];
@@ -325,7 +325,7 @@ const P=[0,0,0];
 function sprite(rgb,size,core){ const c=document.createElement('canvas'); c.width=c.height=size; const g=c.getContext('2d'); const r=size/2, grd=g.createRadialGradient(r,r,0,r,r,r); const centre=core?(TH.spriteCore==='hue'?rgb.join(','):'255,255,255'):rgb.join(','); if(TH.spriteTight){ grd.addColorStop(0,`rgba(${centre},1)`); grd.addColorStop(0.3,`rgba(${rgb.join(',')},1)`); grd.addColorStop(0.42,`rgba(${rgb.join(',')},0.55)`); grd.addColorStop(0.58,`rgba(${rgb.join(',')},0)`); g.fillStyle=grd; g.fillRect(0,0,size,size); return c; }
   grd.addColorStop(0,`rgba(${centre},1)`); grd.addColorStop(0.25,`rgba(${rgb.join(',')},0.9)`); grd.addColorStop(0.55,`rgba(${rgb.join(',')},0.25)`); grd.addColorStop(1,`rgba(${rgb.join(',')},0)`); g.fillStyle=grd; g.fillRect(0,0,size,size); return c; }
 let SPR_DIM,SPR,SPR_FLASH,SPR_WHITE;
-function buildSprites(){ SPR_DIM=LOBES.map(L=>sprite(L.rgb.map(v=>Math.min(255,Math.round(v*TH.dimK))),16,false)); SPR=LOBES.map(L=>sprite(L.rgb,16,true)); SPR_FLASH=LOBES.map(L=>sprite(L.rgb,64,true)); SPR_WHITE=sprite(TH.spec,48,true); }
+function buildSprites(){ const ps=TH.spriteTight?48:16; SPR_DIM=LOBES.map(L=>sprite(L.rgb.map(v=>Math.min(255,Math.round(v*TH.dimK))),ps,false)); SPR=LOBES.map(L=>sprite(L.rgb,ps,true)); SPR_FLASH=LOBES.map(L=>sprite(L.rgb,64,true)); SPR_WHITE=sprite(TH.spec,48,true); }
 buildSprites();
 // ---------- aura: a faint nebula field around the whole brain ----------
 function nebula(size,seedv){ seed=seedv; const c=document.createElement('canvas'); c.width=c.height=size; const g=c.getContext('2d'); const R=size/2;
@@ -630,7 +630,7 @@ function frameInner(t){
     const pulse=kinds[KIND[i]].pulse; const pb = pulse>0.02 ? 1+pulse*0.8*(0.5+0.5*Math.sin(t*0.004+kinds[KIND[i]].phase+PH[i]*0.3)) : 1;
     ctx.globalAlpha = Math.min(1,(dimmed?0.35:(0.5+0.5*BR[i]))*pb*Math.min(1,PS[i]+0.2)); ctx.drawImage((BR[i]>0.72||pb>1.4)?SPR[li]:SPR_DIM[li], x-s/2, y-s/2, s, s); }
   ctx.globalAlpha=1;
-  flashes.forEach(f=>{ const p=(now-f.t0)/f.dur; const a=Math.sin(p*Math.PI)*f.amp; const s=base*(3.2+2.5*f.amp)*(0.7+0.3*(1-p))*PS[f.i]; const x=PX[f.i],y=PY[f.i]; ctx.globalAlpha=Math.min(1,a); ctx.drawImage(SPR_FLASH[LOBE[f.i]],x-s/2,y-s/2,s,s); if(f.amp>1.2){ ctx.globalAlpha=Math.min(1,a*0.6); ctx.drawImage(SPR_WHITE,x-s/3,y-s/3,s*0.66,s*0.66);} });
+  flashes.forEach(f=>{ const p=(now-f.t0)/f.dur; const a=Math.sin(p*Math.PI)*f.amp; if(TH.spriteTight){ const x=PX[f.i],y=PY[f.i]; const rgb=LOBES[LOBE[f.i]].rgb.join(','); const r0=base*0.9*PS[f.i]; ctx.globalAlpha=Math.min(1,a); ctx.fillStyle=`rgb(${rgb})`; ctx.beginPath(); ctx.arc(x,y,r0*(1+0.4*f.amp),0,6.283); ctx.fill(); ctx.strokeStyle=`rgba(${rgb},${Math.max(0,1-p)*0.8})`; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(x,y,r0*(1.6+3*p*f.amp),0,6.283); ctx.stroke(); ctx.globalAlpha=1; return; } const s=base*(3.2+2.5*f.amp)*(0.7+0.3*(1-p))*PS[f.i]; const x=PX[f.i],y=PY[f.i]; ctx.globalAlpha=Math.min(1,a); ctx.drawImage(SPR_FLASH[LOBE[f.i]],x-s/2,y-s/2,s,s); if(f.amp>1.2){ ctx.globalAlpha=Math.min(1,a*0.6); ctx.drawImage(SPR_WHITE,x-s/3,y-s/3,s*0.66,s*0.66);} });
   ctx.globalAlpha=1;
   // signals
   signals.forEach(g=>{ const tt=g.rev?1-g.t:g.t, tp=g.rev?1-Math.max(0,g.t-0.07):Math.max(0,g.t-0.07); let q,q0;

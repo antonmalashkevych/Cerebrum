@@ -48,5 +48,5 @@ so an archetype run can light the ribbons it actually touched. Disabled under `p
 
 Both builds are dark-first and switch to a light palette when Kinetic sets `data-theme="light"` on the root element,
 when the OS prefers light and no `data-theme` is set, or with `?theme=light` on the URL for review. Only colors, gradients,
-blend modes and the aura change; layout and behavior are identical. Light lobe hues: Grounding #2578FF, Governance #F59E0B,
-Agent #8B5CF6, Executable #F97316: vivid dots with soft hue halos, pastel aura in multiply, subtle slate impulses.
+blend modes and the aura change; layout and behavior are identical. Light has its own palette: Grounding teal #0E9A8D, Governance amber #E09A0A,
+Agent magenta #C2379B, Executable cobalt #2F5FD6: crisp hard-edged dots, ring-style firing, pastel aura in multiply, subtle slate impulses.
