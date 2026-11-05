@@ -830,7 +830,7 @@ const Loader=(()=>{
   const pointOn=(c,d)=>{ for(const s of c){ if(d<=s.len) return qpt(s,d/s.len); d-=s.len; } const s=c[c.length-1]; return [s.x1,s.y1]; };
   let frameA=[0,0,400,400], frameB=[0,0,900,700];
   function build(){ rs=1000+cycle*7919; neurons=[]; links=[]; imps=[]; sparks=[];
-    const cols=[LOBES[0].rgb,LOBES[3].rgb,LOBES[2].rgb,LOBES[1].rgb]; const main=cols[cycle%4];
+    const blue=THEME==='light'?[37,120,255]:[90,169,255]; const cols=[blue,LOBES[3].rgb,LOBES[2].rgb,LOBES[1].rgb]; const main=blue;
     const o=[[430,-150],[-400,190],[380,260]]; const ang=(a,b)=>Math.atan2(b[1]-a[1],b[0]-a[0]); const dist=(a,b)=>Math.hypot(b[0]-a[0],b[1]-a[1]);
     neurons.push(makeNeuron(0,0,ang([0,0],o[0])+(rnd2()-0.5)*0.2,main,200,false,dist([0,0],o[0])*0.55));
     const rots=[ang(o[0],[0,0])+Math.PI, ang(o[1],[0,0]), ang(o[2],o[0])]; const lens=[220, dist(o[1],[0,0])*0.55, dist(o[2],o[0])*0.55];
